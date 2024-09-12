@@ -3,6 +3,11 @@ from tortoise.models import Model
 
 
 class UsersDriverData(Model):
+    """
+    Используется для хранения основной информации о водителе.
+    id_driver ссылается на модель UsersUser.
+    Данные не шифруются.
+    """
     id = fields.BigIntField(pk=True)
     id_driver = fields.BigIntField(null=False)
     id_city = fields.BigIntField(null=False)
@@ -26,6 +31,10 @@ class UsersDriverData(Model):
 
 
 class UsersDriverAnswer(Model):
+    """
+    Используется для хранения ответов на вопросы, заданных при регистрации пользователя в качестве водителя.
+    Как оптимизировать - не знаю.
+    """
     id = fields.BigIntField(pk=True)
     first_answer = fields.TextField(null=True)
     second_answer = fields.TextField(null=True)
@@ -45,6 +54,10 @@ class UsersDriverAnswer(Model):
 
 
 class UsersCar(Model):
+    """
+    Используется для хранения информации о машине водителя и её данных.
+    Ссылается на модель DataCarMark, DataCarModel, DataColor
+    """
     id = fields.BigIntField(pk=True)
     id_car_mark = fields.BigIntField(null=False)
     id_car_model = fields.BigIntField(null=False)
@@ -63,6 +76,11 @@ class UsersCar(Model):
 
 
 class UsersDriverCard(Model):
+    """
+    Используется для хранения данных водительского удостоверения водителя.
+    Данные не шифруются.
+    Ссылается на модель DataCountry.
+    """
     id = fields.BigIntField(pk=True)
     id_country = fields.BigIntField(null=False)
     license = fields.TextField()
@@ -78,6 +96,11 @@ class UsersDriverCard(Model):
 
 
 class DataDriverMode(Model):
+    """
+    Используется для поиска заказов и взаимодействия с этим режимом.
+    Хранит информацию о местоположении водителя при его изменении, полученного с WebSocket.
+    Ссылается на модель UsersUser.
+    """
     id = fields.BigIntField(pk=True)
     id_driver = fields.BigIntField(null=False)
     latitude = fields.FloatField()
