@@ -20,7 +20,7 @@ PROTECTED = [Depends(has_access)]
 PROTECTED_ADMINS = [Depends(has_access_admin)]
 PROTECTED_FRANCHISES = [Depends(has_access_franchise)]
 PROTECTED_FILES = [Depends(has_access_files)]
-
+SECRET_KEY = getenv('SECRET_KEY')
 
 app.include_router(
     mains.router,
@@ -156,7 +156,7 @@ def custom_openapi():
                 - завершить поездку: {"id_order": 0, "lat": 0.0, "lon": 0.0, "flag": "finishDrive", "type": "order"}
             """,
             "responses": {
-                "200": {
+                "101": {
                     "description": '{"status": True, "message": "title_message"}'
                 },
                 "400": {
@@ -175,7 +175,7 @@ def custom_openapi():
                     Если заказ отменен, водителю отправляется уведомление.
                 """,
             "responses": {
-                "200": {
+                "101": {
                     "description": '{"status": True, "id_status": 3}'
                 },
                 "400": {
