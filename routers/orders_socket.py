@@ -1,29 +1,23 @@
 import math
-
+import json
+import uuid
+import time
+import traceback
+from fastapi import APIRouter, WebSocket, Request
 from starlette.websockets import WebSocketDisconnect
 
-from const.login_const import forbidden
-from const.orders_const import start_onetime_drive, CurrentDrive, JSONResponse, you_have_active_drive, \
-    cant_decline_in_drive_mode
-from const.static_data_const import not_user_photo
-from const.users_const import order_not_found, success_answer
 from models.authentication_db import UsersUserAccount, UsersBearerToken
 from models.chats_db import ChatsChatParticipant, ChatsChat
-from models.drivers_db import DataDriverMode
-from fastapi import APIRouter, WebSocket
-from models.orders_db import *
-from fastapi import Request
-from typing import List
-from defs import error, get_time_drive, get_order_data, sendPush
-import traceback
-import time
-import uuid
-import json
-
-from models.static_data_db import DataCarTariff
-from models.users_db import UsersUser, UsersUserPhoto
+from models.drivers_db import DataDriverMode, UsersDriverData, UsersCar
+from models.orders_db import UsersUserOrder, DataOrder, DataOrderInfo, DataOrderAddresses, WaitDataSearchDriver
+from models.static_data_db import DataCarMark, DataCarModel, DataColor
+from const.login_const import forbidden
+from const.orders_const import start_onetime_drive, CurrentDrive, JSONResponse, you_have_active_drive, cant_decline_in_drive_mode
+from const.users_const import order_not_found, success_answer
+from defs import error, get_time_drive, get_order_data, sendPush, get_order_data_for_socket
 
 router = APIRouter()
+
 users = {}
 clients = {}
 
@@ -52,65 +46,129 @@ def generate_responses(answers: list):
 class ConnectionManager:
     def __init__(self):
         self.active_connections: dict = {}
+        self.active_orders: dict = {}
 
     async def connect(self, websocket: WebSocket, token: str):
         await websocket.accept()
         self.active_connections[token] = websocket
         print(f"Driver connected: {token}")
+        await self.notify_clients_about_driver(token)
+
+        # Отправляем водителю все активные заявки клиентов
+        if token in self.active_orders:
+            order = self.active_orders[token]
+            message = json.dumps(order, ensure_ascii=False)
+            await self.send_personal_message(message, websocket)
 
     async def disconnect(self, token: str):
-        websocket = self.active_connections.get(token)
+        websocket = self.active_connections.pop(token, None)
         if websocket:
-            await websocket.close()
-            del self.active_connections[token]
             try:
+                await websocket.close()
                 await DataDriverMode.filter(websocket_token=token).delete()
             except Exception as e:
                 print(f"Error during disconnect: {str(e)}")
 
-    @staticmethod
-    async def send_personal_message(message: str, websocket: WebSocket):
+    async def send_personal_message(self, message: str, websocket: WebSocket):
         try:
             await websocket.send_text(message)
             print(f"Sent message: {message}")
         except Exception as e:
             print(f"Error sending message: {str(e)}")
 
-    async def broadcast(self, message: str):
-        for connection in self.active_connections.values():
-            try:
-                await connection.send_text(message)
-            except Exception as e:
-                print(f"Error broadcasting message: {str(e)}")
+    async def notify_clients_about_driver(self, driver_token: str):
+        driver_data = await self.get_driver_data(driver_token)
+        message = json.dumps({"type": "driver_update", "data": driver_data}, ensure_ascii=False)
+        for client_socket in manager_client.active_connections.values():
+            await manager_client.send_personal_message(message, client_socket)
+
+    async def notify_clients_about_driver_disconnect(self, driver_token: str):
+        message = json.dumps({"type": "driver_disconnect", "driver_token": driver_token}, ensure_ascii=False)
+        for client_socket in manager_client.active_connections.values():
+            await manager_client.send_personal_message(message, client_socket)
+
+    async def get_driver_data(self, token: str):
+        try:
+            # Получаем данные водителя
+            driver = await DataDriverMode.filter(websocket_token=token).first()
+            if not driver:
+                return {}
+
+            # Получаем данные о водителе
+            driver_data = await UsersDriverData.filter(id_driver=driver.id_driver).first()
+            if not driver_data:
+                return {}
+
+            # Получаем данные о машине
+            car = await UsersCar.filter(id=driver_data.id_car).first()
+            if not car:
+                return {}
+
+            # Получаем значения из связанных таблиц
+            car_mark = await DataCarMark.filter(id=car.id_car_mark).first()
+            car_model = await DataCarModel.filter(id=car.id_car_model).first()
+            color = await DataColor.filter(id=car.id_color).first()
+
+            return {
+                "id_driver": driver.id_driver,
+                "latitude": driver.latitude,
+                "longitude": driver.longitude,
+                "car": {
+                    "car_mark": car_mark.title if car_mark else "",
+                    "car_model": car_model.title if car_model else "",
+                    "color": color.title if color else "",
+                    "year_create": car.year_create,
+                    "state_number": car.state_number,
+                    "CTC": car.ctc
+                }
+            }
+        except Exception as e:
+            print(f"Error fetching driver data: {str(e)}")
+            return {}
 
 
 manager_driver = ConnectionManager()
 
 
+async def send_active_orders_to_driver(websocket: WebSocket):
+    """
+    Отправляет водителю все активные заявки клиентов, которые подключены к клиентским сокетам
+    """
+    try:
+        # Получаем всех клиентов, подключенных к сокетам
+        for token, client_socket in clients.items():
+            user_order = await UsersUserOrder.filter(token=token, isActive=True).first()
+            if user_order:
+                # Добавляем логирование для проверки
+                print(f"Found active order for client with token: {token}, order ID: {user_order.id_order}")
+
+                order_info = await get_order_data_for_socket(user_order.id_order)
+
+                # Проверяем, что данные заказа корректны
+                if order_info:
+                    message = json.dumps(order_info, ensure_ascii=False)
+                    print(f"Sending active order {user_order.id_order} to driver: {message}")
+                    await manager_driver.send_personal_message(message, websocket)
+                else:
+                    print(f"Error: get_order_data returned null for order ID: {user_order.id_order}")
+            else:
+                print(f"No active orders found for client with token: {token}")
+    except Exception as e:
+        print(f"Error sending active orders to driver: {str(e)}")
+        await error(traceback.format_exc())
+
+
 async def send_message_to_client(id_order, id_status, title):
     """Отправка сообщения клиенту"""
     try:
-        # Получаем заказ по id_order
         user_order = await UsersUserOrder.filter(id_order=id_order).first()
 
-        if user_order:
-            print(f"Found user_order: {user_order.token}")
-            # Проверяем, есть ли токен клиента в словаре clients
-            if user_order.token in clients:
-                client_socket = clients[user_order.token]
-
-                # Формируем сообщение
-                message = json.dumps({"status": True, "id_status": id_status, "message": title})
-                print(f"Sending to client: {message}")
-
-                # Отправляем сообщение клиенту
-                await manager_client.send_personal_message(message, client_socket)
-                print("Message sent to client successfully")
-            else:
-                print(f"Client socket not found for token {user_order.token}")
-                print(f"Available tokens: {list(clients.keys())}")
+        if user_order and user_order.token in clients:
+            client_socket = clients[user_order.token]
+            message = json.dumps({"status": True, "id_status": id_status, "message": title})
+            await manager_client.send_personal_message(message, client_socket)
         else:
-            print(f"Order {id_order} not found in UsersUserOrder")
+            print(f"Client socket not found for token {user_order.token if user_order else 'unknown'}")
     except Exception as e:
         print(f"Error sending message to client: {str(e)}")
         await error(traceback.format_exc())
@@ -118,111 +176,131 @@ async def send_message_to_client(id_order, id_status, title):
 
 @router.websocket("/current-drive-mode/{token}")
 async def websocket_endpoint(websocket: WebSocket, token: str):
+    """ Сокет для водителей """
     try:
         await manager_driver.connect(websocket, token)
         users[token] = websocket
+        # Отправляем водителю все активные заявки подключённых клиентов
+        await send_active_orders_to_driver(websocket)
+
         while True:
             message = await websocket.receive_text()
             print(f"Received message from driver {token}: {message}")
-            message = json.loads(message)
+            message_data = json.loads(message)
 
-            lat = message.get("lat")
-            lon = message.get("lon")
+            lat, lon = message_data.get("lat"), message_data.get("lon")
             if lat and lon:
                 await DataDriverMode.filter(websocket_token=token).update(latitude=lat, longitude=lon)
 
-            flag = message.get("flag")
-            id_order = message.get("id_order")
-            to_index_address = message.get("to_index_address")
+            flag = message_data.get("flag")
+            id_order = message_data.get("id_order")
+            to_index_address = message_data.get("to_index_address")
             if not id_order:
                 continue
 
-            if flag == "startDrive":
-                title_message = "The trip has begun"
-                await DataOrder.filter(id=id_order).update(id_status=5)
-                await manager_driver.send_personal_message(json.dumps({"status": True, "message": title_message}),
-                                                           websocket)
-                await send_message_to_client(id_order=id_order, id_status=5, title=title_message)
+            status_mapping = {
+                "startDrive": {"status": 5, "message": "The trip has begun"},
+                "waiting": {"status": 6, "message": "Waiting start"},
+                "isFinish": {"status": 12, "message": "The driver arrived at the point"},
+                "drive": {"status": 5, "message": f"Movement to the point {to_index_address} has begun"},
+                "finishDrive": {"status": 11, "message": "The trip is over"}
+            }
 
-            if flag == "waiting":
-                title_message = "Waiting start"
-                await DataOrder.filter(id=id_order).update(id_status=6)
-                await manager_driver.send_personal_message(json.dumps({"status": True, "message": title_message}),
-                                                           websocket)
-                await send_message_to_client(id_order=id_order, id_status=6, title=title_message)
-
-            if flag == "isFinish":
-                title_message = "The driver arrived at the point"
-                await DataOrder.filter(id=id_order).update(id_status=12)
-                await manager_driver.send_personal_message(json.dumps({"status": True, "message": title_message}),
-                                                           websocket)
-                await send_message_to_client(id_order=id_order, id_status=12, title=title_message)
-
-            if flag == "drive":
-                title_message = f"Movement to the point {to_index_address} has begun"
-                await DataOrder.filter(id=id_order).update(id_status=5)
-                await manager_driver.send_personal_message(json.dumps({"status": True, "message": title_message}),
-                                                           websocket)
-                await send_message_to_client(id_order=id_order, id_status=5, title=title_message)
-
-            if flag == "finishDrive":
-                title_message = "The trip is over"
-                await DataOrder.filter(id=id_order).update(id_status=11)
-                await manager_driver.send_personal_message(json.dumps({"status": True, "message": title_message}),
-                                                           websocket)
-                await send_message_to_client(id_order=id_order, id_status=11, title=title_message)
+            if flag in status_mapping:
+                status_info = status_mapping[flag]
+                await DataOrder.filter(id=id_order).update(id_status=status_info["status"])
+                await manager_driver.send_personal_message(json.dumps({"status": True, "message": status_info["message"]}), websocket)
+                await send_message_to_client(id_order, status_info["status"], status_info["message"])
 
     except Exception as e:
         print(f"Error in websocket handling: {str(e)}")
         await error(traceback.format_exc())
-        try:
-            await manager_driver.disconnect(token)
-        except Exception as e:
-            print(f"Error during disconnection: {str(e)}")
+        await manager_driver.disconnect(token)
 
 
 class ConnectionManagerClient:
     def __init__(self):
-        self.active_connections: dict = {}  # Хранит подключения клиентов по токену
+        self.active_connections: dict = {}
+        self.client_orders: dict = {}
 
     async def connect(self, websocket: WebSocket, token: str):
         await websocket.accept()
         self.active_connections[token] = websocket
+        await self.send_drivers_to_client()
         print(f"Client connected: {token}")
 
-        order = await UsersUserOrder.filter(token=token).first()
-        if order:
-            order_id = order.id_order
-            response = json.dumps({"order_id": order_id})
+        user_order = await UsersUserOrder.filter(token=token, isActive=True).first()
+        if user_order:
+            self.client_orders[token] = user_order
+            response = json.dumps({"order_id": user_order.id_order})
             await websocket.send_text(response)
-            print(f"Sent order_id {order_id} to client {token}")
         else:
             print(f"No order found for token {token}")
 
     async def disconnect(self, token: str):
-        websocket = self.active_connections.get(token)
+        websocket = self.active_connections.pop(token, None)
         if websocket:
             await websocket.close()
-            del self.active_connections[token]
             try:
                 await WaitDataSearchDriver.filter(token=token).delete()
             except Exception as e:
                 print(f"Error during disconnect: {str(e)}")
 
-    @staticmethod
-    async def send_personal_message(message: str, websocket: WebSocket):
+    async def send_personal_message(self, message: str, websocket: WebSocket):
         try:
             await websocket.send_text(message)
             print(f"Sent message to client: {message}")
         except Exception as e:
             print(f"Error sending message: {str(e)}")
 
-    async def broadcast(self, message: str):
-        for connection in self.active_connections.values():
-            try:
-                await connection.send_text(message)
-            except Exception as e:
-                print(f"Error broadcasting message: {str(e)}")
+    async def send_drivers_to_client(self):
+        drivers = [await self.get_driver_data(token) for token in manager_driver.active_connections]
+        for token in manager_driver.active_connections:
+            print(token)
+
+        drivers = [driver for driver in drivers if driver]
+        message = json.dumps({"type": "drivers_update", "drivers": drivers}, ensure_ascii=False)
+        for client_socket in self.active_connections.values():
+            await self.send_personal_message(message, client_socket)
+
+    async def get_driver_data(self, token: str):
+        try:
+            # Получаем данные водителя
+            driver = await DataDriverMode.filter(websocket_token=token).first()
+            if not driver:
+                return {}
+
+            # Получаем данные о водителе
+            driver_data = await UsersDriverData.filter(id_driver=driver.id_driver).first()
+            if not driver_data:
+                return {}
+
+            # Получаем данные о машине
+            car = await UsersCar.filter(id=driver_data.id_car).first()
+            if not car:
+                return {}
+
+            # Получаем значения из связанных таблиц
+            car_mark = await DataCarMark.filter(id=car.id_car_mark).first()
+            car_model = await DataCarModel.filter(id=car.id_car_model).first()
+            color = await DataColor.filter(id=car.id_color).first()
+
+            return {
+                "id_driver": driver.id_driver,
+                "latitude": driver.latitude,
+                "longitude": driver.longitude,
+                "car": {
+                    "car_mark": car_mark.title if car_mark else "",
+                    "car_model": car_model.title if car_model else "",
+                    "color": color.title if color else "",
+                    "year_create": car.year_create,
+                    "state_number": car.state_number,
+                    "CTC": car.ctc
+                }
+            }
+        except Exception as e:
+            print(f"Error fetching driver data: {str(e)}")
+            return {}
 
 
 manager_client = ConnectionManagerClient()
@@ -230,135 +308,97 @@ manager_client = ConnectionManagerClient()
 
 @router.websocket("/search-driver/{token}")
 async def websocket_endpoint_client(websocket: WebSocket, token: str):
+    """ Клиентский сокет """
     try:
         await manager_client.connect(websocket, token)
         clients[token] = websocket
-        print(f"Клиент подключен: {token}")
 
-        # Получаем id_order для данного токена
         user_order = await UsersUserOrder.filter(token=token, isActive=True).first()
         if not user_order:
-            print(f"Активный заказ не найден для токена {token}")
+            print(f"Active order not found for token {token}")
             return
+        # Отправляем активные заказы водителям
+        for driver_token, driver_socket in manager_driver.active_connections.items():
+            order = await get_order_data_for_socket(user_order.id_order)
+            if order:
+                message = json.dumps(order, ensure_ascii=False)
+                await manager_driver.send_personal_message(message, driver_socket)
+                print(f"Sent order {user_order.id_order} to driver {driver_token}.")
 
         while True:
             try:
                 message = await websocket.receive_text()
-                print(f"Получено сообщение от клиента {token}: {message}")
+                message_data = json.loads(message)
+                if message_data.get("flag") == "cancel":
 
-                # Проверяем, является ли сообщение валидным JSON
-                try:
-                    message_data = json.loads(message)
-                except json.JSONDecodeError as json_error:
-                    print(f"Ошибка разбора JSON: {str(json_error)}")
-                    print(f"Исходное сообщение: {message}")
-                    continue  # Пропускаем это сообщение и продолжаем цикл
-
-                # Если клиент отправляет сообщение о закрытии соединения
-                if message_data.get("status") == True and message_data.get("id_status") == 3:
-                    print(f"Клиент {token} запросил закрытие соединения")
-
-                    # Отправляем сообщение водителю
                     await send_message_to_driver(user_order.id_order, message_data)
-
-                    # Закрываем соединение
-                    await websocket.close(code=1000)  # Код 1000 обозначает нормальное завершение
-                    print(f"Соединение клиента {token} закрыто")
+                    await websocket.close(code=1000)
                     break
-
-                # Добавляем id_order к сообщению
                 message_data["id_order"] = user_order.id_order
-
-                # Отправляем сообщение водителю
                 await send_message_to_driver(user_order.id_order, message_data)
-
             except WebSocketDisconnect:
-                print(f"WebSocket соединение закрыто клиентом {token}")
                 break
             except Exception as e:
-                print(f"Ошибка при обработке сообщения от клиента: {str(e)}")
+                print(f"Error processing message from client: {str(e)}")
                 await error(traceback.format_exc())
-
-    except Exception as e:
-        print(f"Ошибка в обработке клиентского веб-сокета: {str(e)}")
-        await error(traceback.format_exc())
     finally:
         await manager_client.disconnect(token)
-        print(f"Клиент отключен: {token}")
 
 
 def calculate_distance(lat1, lon1, lat2, lon2):
-    R = 6371  # Радиус Земли в километрах
-
+    R = 6371  # Radius of Earth in kilometers
     dlat = math.radians(lat2 - lat1)
     dlon = math.radians(lon2 - lon1)
-    a = (math.sin(dlat / 2) * math.sin(dlat / 2) +
+    a = (math.sin(dlat / 2) ** 2 +
          math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) *
-         math.sin(dlon / 2) * math.sin(dlon / 2))
+         math.sin(dlon / 2) ** 2)
     c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
-    distance = R * c
-
-    return distance
+    return R * c
 
 
 async def send_message_to_driver(id_order, message_data):
-    """Отправка сообщения водителю"""
+    """ Отправка сообщения водителю """
     try:
-        # Получаем заказ по id_order
         order = await DataOrder.filter(id=id_order, isActive=True).first()
 
         if order and order.id_driver:
-            # Получаем токен водителя
             driver_mode = await DataDriverMode.filter(id_driver=order.id_driver).first()
 
             if driver_mode and driver_mode.websocket_token in manager_driver.active_connections:
                 driver_socket = manager_driver.active_connections[driver_mode.websocket_token]
-
-                # Формируем сообщение
                 message = json.dumps(message_data)
-                print(f"Отправка сообщения водителю: {message}")
-
-                # Отправляем сообщение водителю
                 await manager_driver.send_personal_message(message, driver_socket)
-                print("Сообщение успешно отправлено водителю")
+                await DataOrder.filter(id=id_order).update(id_status=3, isActive=False)
             else:
-                print(f"Сокет водителя не найден для заказа {id_order}")
-                print(f"Возможные токены водителей: {list(manager_driver.active_connections.keys())}")
-        else:
-            print(f"Заказ {id_order} не найден или не назначен водитель")
+                print(f"Driver socket not found for order {id_order}")
     except Exception as e:
-        print(f"Ошибка при отправке сообщения водителю: {str(e)}")
+        print(f"Error sending message to driver: {str(e)}")
         await error(traceback.format_exc())
 
 
 async def send_order_to_driver(id_order: int):
     try:
-        order = await DataOrder.filter(id=id_order, isActive=True).first().values()
-        if order is None or len(order) == 0:
+        order = await DataOrder.filter(id=id_order, isActive=True).first()
+        if not order:
             return
-
         order_info = await DataOrderInfo.filter(id_order=id_order).first()
-        if order_info is None:
+        if not order_info:
             return
 
-        answer = await get_order_data(order)
-
-        # Получаем всех активных водителей
         active_drivers = await DataDriverMode.filter(isActive=True).all()
 
         for driver in active_drivers:
-            # Проверяем расстояние между водителем и клиентом
             distance = calculate_distance(driver.latitude, driver.longitude,
                                           order_info.client_lat, order_info.client_lon)
-
-            # Если расстояние менее 3 км, отправляем заказ водителю
             if distance <= 3:
                 driver_socket = users.get(driver.token)
                 if driver_socket:
-                    message = json.dumps(answer)
+                    message = json.dumps(await get_order_data(order.id))
                     await manager_driver.send_personal_message(message, driver_socket)
-
-    except Exception:
+                else:
+                    print(f"Driver socket not found for token {driver.token}")
+    except Exception as e:
+        print(f"Error sending order to driver: {str(e)}")
         await error(traceback.format_exc())
 
 
