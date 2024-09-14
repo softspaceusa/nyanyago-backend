@@ -54,6 +54,7 @@ class ConnectionManager:
         print(f"Driver connected: {token}")
         await self.notify_clients_about_driver(token)
 
+        # Отправляем водителю все активные заявки клиентов
         if token in self.active_orders:
             order = self.active_orders[token]
             message = json.dumps(order, ensure_ascii=False)
@@ -83,6 +84,7 @@ class ConnectionManager:
 
         # Проходим по всем активным клиентам и проверяем расстояние
         for client_token, client_socket in manager_client.active_connections.items():
+            # Получаем данные о клиенте и его заказе
             user_order = await UsersUserOrder.filter(token=client_token, isActive=True).first()
             if user_order:
                 order_info = await DataOrderInfo.filter(id_order=user_order.id_order).first()
@@ -159,6 +161,7 @@ async def send_active_orders_to_driver(websocket: WebSocket):
         for token, client_socket in clients.items():
             user_order = await UsersUserOrder.filter(token=token, isActive=True).first()
             if user_order:
+                # Получаем информацию о заказе для сокета
                 order_info = await get_order_data_for_socket(user_order.id_order)
 
                 # Проверяем наличие данных заказа
@@ -174,12 +177,10 @@ async def send_active_orders_to_driver(websocket: WebSocket):
                         # Вычисляем расстояние между клиентом и водителем
                         distance = calculate_distance(driver_mode.latitude, driver_mode.longitude, client_lat,
                                                       client_lon)
-                        print(f"Расстояние до клиента: {distance:.2f} км")
 
                         # Если расстояние меньше или равно 3 км, отправляем заявку водителю
                         if distance <= 3:
                             message = json.dumps(order_info, ensure_ascii=False)
-                            print(f"Sending active order {user_order.id_order} to driver: {message}")
                             await manager_driver.send_personal_message(message, websocket)
                         else:
                             print(f"Заявка {user_order.id_order} не отправлена водителю из-за превышения радиуса.")
@@ -231,7 +232,7 @@ async def websocket_endpoint(websocket: WebSocket, token: str):
                 if order_info and is_valid_coordinate(order_info.client_lat, order_info.client_lon):
                     distance = calculate_distance(driver_mode.latitude, driver_mode.longitude,
                                                   order_info.client_lat, order_info.client_lon)
-                    if distance <= 3:
+                    if distance <= 3:  # Проверка на расстояние не более 3 км
                         order = await get_order_data_for_socket(user_order.id_order)
                         if order:
                             message = json.dumps(order, ensure_ascii=False)
@@ -340,18 +341,22 @@ class ConnectionManagerClient:
 
     async def get_driver_data(self, token: str):
         try:
+            # Получаем данные водителя
             driver = await DataDriverMode.filter(websocket_token=token).first()
             if not driver:
                 return {}
 
+            # Получаем данные о водителе
             driver_data = await UsersDriverData.filter(id_driver=driver.id_driver).first()
             if not driver_data:
                 return {}
 
+            # Получаем данные о машине
             car = await UsersCar.filter(id=driver_data.id_car).first()
             if not car:
                 return {}
 
+            # Получаем значения из связанных таблиц
             car_mark = await DataCarMark.filter(id=car.id_car_mark).first()
             car_model = await DataCarModel.filter(id=car.id_car_model).first()
             color = await DataColor.filter(id=car.id_color).first()
@@ -401,7 +406,7 @@ async def websocket_endpoint_client(websocket: WebSocket, token: str):
             if driver_mode and is_valid_coordinate(driver_mode.latitude, driver_mode.longitude):
                 distance = calculate_distance(driver_mode.latitude, driver_mode.longitude,
                                               order_info.client_lat, order_info.client_lon)
-                if distance <= 3:
+                if distance <= 3:  # Проверка на расстояние не более 3 км
                     order = await get_order_data_for_socket(user_order.id_order)
                     if order:
                         message = json.dumps(order, ensure_ascii=False)
@@ -417,6 +422,7 @@ async def websocket_endpoint_client(websocket: WebSocket, token: str):
                 message = await websocket.receive_text()
                 message_data = json.loads(message)
                 if message_data.get("flag") == "cancel":
+                    await DataOrder.filter(id=user_order.id_order).update(id_status=3, isActive=False)
                     await send_message_to_driver(user_order.id_order, message_data)
                     await websocket.close(code=1000)
                     break
