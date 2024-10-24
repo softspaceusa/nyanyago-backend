@@ -1,4 +1,5 @@
 import json
+import logging
 
 import requests
 from firebase_dynamic_links import DynamicLinks
@@ -12,7 +13,7 @@ from uuid import uuid4
 import phonenumbers
 import traceback
 
-from models.orders_db import DataScheduleRoadDriver, DataOrderInfo, DataOrderAddresses
+from models.orders_db import DataScheduleRoadDriver, DataOrderInfo, DataOrderAddresses, DataOrder
 from models.users_db import UsersUser, UsersUserPhoto
 
 
@@ -268,6 +269,148 @@ async def get_time_drive(latitude_a, longitude_a, latitude_b, longitude_b, amoun
         await error(traceback.format_exc())
         return None
 
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+
+async def get_order_data_socket(order):
+    try:
+        logger.info(f"Fetching user info for user {order.id_user}")
+        user = await UsersUser.filter(id=order.id_user, isActive=True).first().values()
+        if user is None:
+            logger.error(f"User {order.id_user} not found or inactive")
+            return None
+
+        try:
+            logger.info(f"Fetching user photo for user {order.id_user}")
+            user_photo = (await UsersUserPhoto.filter(id_user=order.id_user).first().values())["photo_path"]
+        except Exception as e:
+            logger.error(f"Error fetching user photo for user {order.id_user}: {str(e)}")
+            user_photo = not_user_photo
+
+        logger.info(f"Fetching order info for order {order.id}")
+        order_info = await DataOrderInfo.filter(id_order=order.id).first().values()
+        if not order_info:
+            logger.error(f"Order info for order {order.id} not found")
+            return None
+
+        answer = {
+            "id_order": order.id,
+            "username": user["name"],
+            "phone": user["phone"],
+            "user_photo": user_photo,
+            "amount": float(order_info["price"]),
+            "id_status": order.id_status
+        }
+
+        logger.info(f"Fetching addresses for order {order.id}")
+        addresses = await DataOrderAddresses.filter(id_order=order.id).order_by("id").all().values()
+        for each in addresses:
+            _, duration = await get_time_drive(each["from_lat"], each["from_lon"],
+                                               each["to_lat"], each["to_lon"], 0)
+            if "addresses" not in answer:
+                answer["addresses"] = [{
+                    "from": each["from_address"],
+                    "isFinish": each["isFinish"],
+                    "to": each["to_address"],
+                    "from_lat": each["from_lat"],
+                    "from_lon": each["from_lon"],
+                    "to_lat": each["to_lat"],
+                    "to_lon": each["to_lon"],
+                    "duration": duration
+                }]
+            else:
+                answer["addresses"].append({
+                    "from": each["from_address"],
+                    "isFinish": each["isFinish"],
+                    "to": each["to_address"],
+                    "from_lat": each["from_lat"],
+                    "from_lon": each["from_lon"],
+                    "to_lat": each["to_lat"],
+                    "to_lon": each["to_lon"],
+                    "duration": duration
+                })
+
+        logger.info(f"Successfully fetched order data for order {order.id}")
+        return answer
+
+    except Exception as e:
+        logger.error(f"Error in get_order_data for order {order.id}: {str(e)}")
+        return None
+
+
+async def get_order_data_for_socket(order_id):
+    try:
+        # Получаем заказ из базы данных
+        order = await DataOrder.filter(id=order_id).first().values()
+        if not order:
+            print(f"Order not found for ID: {order_id}")
+            return None
+
+        user_id = order.get("id_user")
+
+        # Получаем данные о пользователе
+        user = await UsersUser.filter(id=user_id, isActive=True).first().values()
+        if not user:
+            print(f"User not found for ID: {user_id}")
+            return None
+
+        # Получаем фото пользователя
+        try:
+            user_photo_data = await UsersUserPhoto.filter(id_user=user_id).first().values()
+            user_photo = user_photo_data["photo_path"] if user_photo_data else not_user_photo
+        except Exception as e:
+            print(f"Error fetching user photo: {str(e)}")
+            user_photo = not_user_photo
+
+        # Получаем данные заказа
+        order_info = await DataOrderInfo.filter(id_order=order_id).first().values()
+        if not order_info:
+            print(f"Order info not found for order ID: {order_id}")
+            return None
+
+        amount = order_info.get("price", 0)
+        id_status = order_info.get("id_status", "unknown")
+
+        # Формируем ответ
+        answer = {
+            "id_order": order_id,
+            "username": user["name"],
+            "phone": user["phone"],
+            "user_photo": user_photo,
+            "amount": float(amount),
+            "id_status": id_status
+        }
+
+        # Получаем адреса
+        addresses = await DataOrderAddresses.filter(id_order=order_id).order_by("id").all().values()
+        if not addresses:
+            print(f"No addresses found for order ID: {order_id}")
+            answer["addresses"] = []
+        else:
+            answer["addresses"] = []
+            for each in addresses:
+                # Получаем время в пути
+                _, duration = await get_time_drive(each["from_lat"], each["from_lon"],
+                                                   each["to_lat"], each["to_lon"], 0)
+                address_data = {
+                    "from": each["from_address"],
+                    "isFinish": each["isFinish"],
+                    "to": each["to_address"],
+                    "from_lat": each["from_lat"],
+                    "from_lon": each["from_lon"],
+                    "to_lat": each["to_lat"],
+                    "to_lon": each["to_lon"],
+                    "duration": duration
+                }
+                answer["addresses"].append(address_data)
+
+        return answer
+    except Exception as e:
+        print(f"Error in get_order_data: {str(e)}")
+        await error(traceback.format_exc())
+        return None
+
 
 async def get_order_data(order):
     try:
@@ -301,4 +444,3 @@ async def get_order_data(order):
         return answer
     except Exception:
         await error(traceback.format_exc())
-

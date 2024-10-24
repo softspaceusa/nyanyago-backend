@@ -234,8 +234,8 @@ async def reset_password(item: VerifyMobilePhone):
                                            user_not_found,
                                            success_answer]))
 async def registartion_parent(item: VerifyCodeMobilePhone):
-    item.phone = await check_correct_phone(item.phone)
-    if item.phone is None: return uncorrect_phone
+    #item.phone = await check_correct_phone(item.phone)
+    #if item.phone is None: return uncorrect_phone
     data = await WaitDataVerifyCode.filter(phone=item.phone).first().values()
     if data is None:
         return uncorrect_phone
@@ -255,8 +255,8 @@ async def registartion_parent(item: VerifyCodeMobilePhone):
                                            uncorrect_phone,
                                            success_answer]))
 async def verify_reset_password(item: VerifyResetPassword):
-    item.phone = await check_correct_phone(item.phone)
-    if item.phone is None: return uncorrect_phone
+    #item.phone = await check_correct_phone(item.phone)
+    #if item.phone is None: return uncorrect_phone
     if await UsersUser.filter(phone=item.phone).count() == 0:
         return user_not_found
     await UsersAuthorizationData.filter(login=item.phone).update(password=item.password)

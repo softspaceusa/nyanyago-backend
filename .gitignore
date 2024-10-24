@@ -138,3 +138,7 @@ dmypy.json
 # HTML settings
 .editorconfig
 csscomb.json
+/.env
+/fullchain.pem
+/log_error.txt
+/privkey.pem

@@ -338,7 +338,9 @@ get_today_schedule = JSONResponse({"status": True,
                                                  }
                                 ]})
 
-
+get_driver_token = JSONResponse({"status": True,
+                                   "message": "Success!",
+                                   "websocket_token": "string"})
 
 
 class NowLocation(BaseModel):

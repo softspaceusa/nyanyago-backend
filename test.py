@@ -52,43 +52,8 @@ API_KEY = 'AIzaSyAal05yap1WdDdZrF0KrrqzcdvY3E8-D68'
 gmaps = googlemaps.Client(key=API_KEY)
 
 # Задаем начальные и конечные координаты
-origin = (55.685580, 37.676250)
-destination = (57.152864, 65.540597) # hour hours   min mins  day  days
-
-
-def get_time_from_google(durations):
-    durations = durations.split(" ")
-    times = int(float(durations[0]))
-    if durations[1].lower() in ("hour", "hours"):
-        times *= 60
-    if durations[1].lower() in ("day", "days"):
-        times *= 60 * 24
-    if durations[1].lower() in ("week", "weeks"):
-        times *= 60 * 24 * 7
-    if durations[1].lower() in ("month", "months"):
-        times *= 60 * 24 * 30
-    if len(durations) == 2:
-        return times
-    if durations[3].lower() in ("hour", "hours"):
-        times += 60 * int(float(durations[2]))
-    if durations[3].lower() in ("day", "days"):
-        times += 60 * 24 * int(float(durations[2]))
-    if durations[3].lower() in ("week", "weeks"):
-        times += 60 * 24 * 7 * int(float(durations[2]))
-    if durations[3].lower() in ("month", "months"):
-        times += 60 * 24 * 30 * int(float(durations[2]))
-    if len(durations) == 4:
-        return times
-    if durations[5].lower() in ("hour", "hours"):
-        times += 60 * int(float(durations[4]))
-    if durations[5].lower() in ("day", "days"):
-        times += 60 * 24 * int(float(durations[4]))
-    if durations[5].lower() in ("week", "weeks"):
-        times += 60 * 24 * 7 * int(float(durations[4]))
-    if durations[5].lower() in ("month", "months"):
-        times += 60 * 24 * 30 * int(float(durations[4]))
-    return times
-
+origin = (latitude_a, longitude_a)
+destination = (latitude_b, longitude_b)
 
 # Получаем направление между двумя точками
 directions_result = gmaps.directions(origin, destination, mode="driving")
@@ -103,4 +68,3 @@ duration = directions_result[0]['legs'][0]['duration']['text']
 
 print(f"Расстояние: {distance}")
 print(f"Время в пути: {duration}")
-print(f"Время в пути: {get_time_from_google(duration)}")

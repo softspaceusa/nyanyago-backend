@@ -193,13 +193,12 @@ app.openapi = custom_openapi
 
 register_tortoise(
     app,
-    db_url=f"postgres://{getenv('DB_USER')}:{getenv('DB_PASSWORD')}@{getenv('DB_HOST')}:5432/{getenv('DB_NAME')}",
+    db_url="postgres://api_auto_nanny:8yWcJm48c37*c~%yM72H@77.232.137.74:5432/api_nanny",
     modules={"models": ["models.authentication_db", "models.files_db", "models.users_db", "models.drivers_db",
                         "models.static_data_db", "models.chats_db", "models.admins_db", "models.orders_db"]},
     generate_schemas=True,
     add_exception_handlers=True
 )
-
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", log_level=settings.log_level, port=settings.port,
