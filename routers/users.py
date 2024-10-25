@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 from const.users_const import UpdateUserData, success_answer, SbpPayment, start_sbp_answer, StartPayment, LimitOffset, \
     task_to_text
 from const.users_const import DeleteDebitCard, AddMoney, UserDataPayment, order_not_found, ConfirmPayment, get_money
@@ -11,7 +13,7 @@ from models.static_data_db import DataColor, DataCarModel, DataCarMark, DataType
 from const.static_data_const import not_user_photo, access_forbidden, DictToModel
 from defs import get_websocket_token
 from models.drivers_db import UsersDriverData, UsersCar
-from fastapi import APIRouter, Request, HTTPException
+from fastapi import APIRouter, Request, HTTPException, Query
 from const.drivers_const import *
 import requests
 import datetime
@@ -127,18 +129,49 @@ async def update_me_data(request: Request, item: UpdateUserData):
 
 @router.post("/money",
              responses=generate_responses([get_money]))
-async def get_my_money(request: Request, item: Union[LimitOffset, None] = None):
+async def get_my_money(request: Request, item: Union[LimitOffset, None] = None, period: str = "current_day"):
+
+    now = datetime.now()
+
+    if period == "current_day":
+        start_date = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        end_date = now.replace(hour=23, minute=59, second=59, microsecond=999999)
+    elif period == "current_week":
+        start_date = now - datetime.timedelta(days=now.weekday())
+        start_date = start_date.replace(hour=0, minute=0, second=0, microsecond=0)
+        end_date = now.replace(hour=23, minute=59, second=59, microsecond=999999)
+    elif period == "current_month":
+        start_date = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        end_date = now.replace(hour=23, minute=59, second=59, microsecond=999999)
+    elif period == "current_year":
+        start_date = now.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
+        end_date = now.replace(hour=23, minute=59, second=59, microsecond=999999)
+    else:
+        return JSONResponse({"status": False, "message": "Invalid period."}, status_code=400)
+
     balance = await DataUserBalance.filter(id_user=request.user).first().values()
     if balance is None or len(balance) == 0:
         await DataUserBalance.create(id_user=request.user, money=decimal.Decimal(0.0))
         balance = {"money": 0.0}
-    if item is not None:
-        history = await DataUserBalanceHistory.filter(id_user=request.user, isComplete=True
-                                                      ).offset(item.offset).limit(item.limit).all().values()
-    else:
-        history = await DataUserBalanceHistory.filter(id_user=request.user, isComplete=True).all().values()
+
+    history = await DataUserBalanceHistory.filter(
+        id_user=request.user,
+        isComplete=True,
+        datetime_create__gte=start_date,
+        datetime_create__lte=end_date
+    ).all().values()
+
+    income_list = []
+    expenses_list = []
+    detailed_history = []
+
     for each in history:
-        each["title"] = task_to_text[each["id_task"]]
+        if each["money"] > 0:
+            income_list.append(float(each["money"]))
+        else:
+            expenses_list.append(float(each["money"]))
+
+        each["title"] = task_to_text.get(each["id_task"], "Unknown Task")
         each["date"] = f"{each['datetime_create'].date().day}/{each['datetime_create'].date().month}"
         each["amount"] = str(each["money"])
         del each["id"]
@@ -148,10 +181,17 @@ async def get_my_money(request: Request, item: Union[LimitOffset, None] = None):
         del each["isComplete"]
         del each["datetime_create"]
 
-    return JSONResponse({"status": True,
-                         "message": "Success!",
-                         "balance": float(balance["money"]),
-                         "history": history})
+        detailed_history.append(each)
+
+    return JSONResponse({
+        "status": True,
+        "message": "Success!",
+        "balance": float(balance["money"]),
+        "income": income_list,
+        "expenses": expenses_list,
+        "history": detailed_history
+    })
+
 
 
 @router.post("/get-my-card",

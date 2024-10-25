@@ -142,3 +142,4 @@ csscomb.json
 /fullchain.pem
 /log_error.txt
 /privkey.pem
+/api_nanny_dump.sql
