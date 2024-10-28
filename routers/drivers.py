@@ -141,67 +141,6 @@ async def send_payment_requests(request: Request, item: SendPaymentRequest):
         return success_answer
 
 
-# @router.get("/get_schedules_requests",
-#              responses=generate_responses([get_schedules_responses,
-#                                            schedule_not_found,
-#                                            access_forbidden]))
-# async def get_schedule(request: Request, limit: Union[int, None] = 30, offset: Union[int, None] = 0):
-#     schedules = await DataSchedule.filter(isActive=False).limit(limit).offset(offset).all().values\
-#                        ("id", "id_user", "title", "description", "children_count",
-#                                                         "id_tariff", "week_days", "duration")
-#     for schedule in schedules:
-#         photo = await UsersUserPhoto.filter(id_user=schedule["id"]).first().values()
-#         schedule["user"] = {
-#             "id_user": schedule["id_user"],
-#             "name": (await UsersUser.filter(id=schedule["id_user"]).first().values())["name"],
-#             "photo_path": not_user_photo if photo is None or len(photo) == 0 else photo["photo_path"]
-#         }
-#         schedule["week_days"] = [int(x) for x in schedule["week_days"].split(";")]
-#         other_parametrs = await DataScheduleOtherParametrs.filter(id_schedule=schedule["id"],
-#                                                                   isActive=True).order_by("id").all().values()
-#         other_parametrs_data = []
-#         for parametr in other_parametrs:
-#             other_parametrs_data.append({
-#                 "parametr": parametr["id_other_parametr"],
-#                 "count": parametr["amount"]
-#             })
-#         schedule["other_parametrs"] = other_parametrs_data
-#         roads = await DataScheduleRoad.filter(id_schedule=schedule["id"], isActive=True).order_by("id").all().values()
-#         for road in roads:
-#             road["type_drive"] = [int(x) for x in road["type_drive"].split(";")]
-#             addresses = await DataScheduleRoadAddress.filter(id_schedule_road=road["id"]).order_by("id").all().values()
-#             data_addresses = []
-#             for address in addresses:
-#                 address_data = {
-#                                     "from_address": {
-#                                         "address": address["from_address"],
-#                                         "location": {
-#                                             "longitude": address["from_lon"],
-#                                             "latitude": address["from_lat"]
-#                                         }
-#                                     },
-#                                     "to_address": {
-#                                         "address": address["to_address"],
-#                                         "location": {
-#                                             "longitude": address["to_lon"],
-#                                             "latitude": address["to_lat"]
-#                                         }
-#                                     }
-#                 }
-#                 data_addresses.append(address_data)
-#             road["addresses"] = data_addresses
-#             road["salary"] = 0
-#             del road["id_schedule"]
-#             del road["isActive"]
-#             del road["datetime_create"]
-#         schedule["roads"] = roads
-#         del schedule["id_user"]
-#         schedule["all_salary"] = 0
-#     print(schedules)
-#     return JSONResponse({"status": True,
-#                          "message": "Success!",
-#                          "schedules": schedules}, 200)
-
 @router.get("/get_schedules_requests",
             responses=generate_responses([get_schedules_responses,
                                           schedule_not_found,
