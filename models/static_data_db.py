@@ -3,10 +3,6 @@ from tortoise import fields
 
 
 class DataCountry(Model):
-    """
-    Используется для хранения стран мира (Несмотря на работу проекта только в границах России, права могут быть выданы
-     в других странах).
-    """
     id = fields.BigIntField(pk=True)
     title = fields.TextField()
 
@@ -19,9 +15,6 @@ class DataCountry(Model):
 
 
 class DataColor(Model):
-    """
-    Используется для хранения информации об основных цветах окраски автомобилей.
-    """
     id = fields.BigIntField(pk=True)
     title = fields.TextField()
 
@@ -34,9 +27,6 @@ class DataColor(Model):
 
 
 class DataCity(Model):
-    """
-    Используется для хранения городов России (Проект будет работать только в России).
-    """
     id = fields.BigIntField(pk=True)
     title = fields.TextField()
 
@@ -49,9 +39,6 @@ class DataCity(Model):
 
 
 class DataCarMark(Model):
-    """
-    Используется для хранения актуальных марок автомобилей.
-    """
     id = fields.BigIntField(pk=True)
     title = fields.TextField()
 
@@ -64,9 +51,6 @@ class DataCarMark(Model):
 
 
 class DataCarModel(Model):
-    """
-    Используется для хранения актуальных моделей автомобилей.
-    """
     id = fields.BigIntField(pk=True)
     title = fields.TextField()
     id_car_mark = fields.BigIntField(null=False)
@@ -81,10 +65,6 @@ class DataCarModel(Model):
 
 
 class DataTypeAccount(Model):
-    """
-    Используется для хранения информации о ролях приложения.
-    Можно заменить константами.
-    """
     id = fields.BigIntField(pk=True)
     title = fields.TextField()
 
@@ -97,10 +77,6 @@ class DataTypeAccount(Model):
 
 
 class DataOtherDriveParametr(Model):
-    """
-    Используется для хранения информации о дополнительных услугах, доступных пользователям при оформлении поездок
-    по графику и разовых.
-    """
     id = fields.BigIntField(pk=True)
     title = fields.TextField()
     amount = fields.DecimalField(10, 2)
@@ -116,12 +92,6 @@ class DataOtherDriveParametr(Model):
 
 
 class DataCarTariff(Model):
-    """
-    Используется для хранения информации о тарифах.
-    Обсуждалось, что у каждой франшизы есть тарифы по умолчанию, но также они могут создавать свои собсвенные,
-    стоимость которых будет равна бизнес тарифу.
-    Ссылается на модель UsersFranchise.
-    """
     id = fields.BigIntField(pk=True)
     title = fields.TextField()
     description = fields.TextField(null=True)

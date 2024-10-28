@@ -3,9 +3,6 @@ from tortoise.models import Model
 
 
 class AdminMobileSettings(Model):
-    """
-    Используется для хранения настроек приложений, заданных главным администратором
-    """
     id = fields.BigIntField(pk=True)
     biometry = fields.BooleanField()
 

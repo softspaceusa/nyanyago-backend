@@ -3,10 +3,6 @@ from tortoise.models import Model
 
 
 class DataDrivingStatus(Model):
-    """
-    Используется для хранения статусов поездок.
-    Можно заменить на константы.
-    """
     id = fields.BigIntField(pk=True)
     status = fields.TextField()
 
@@ -20,10 +16,6 @@ class DataDrivingStatus(Model):
 
 
 class DataOrder(Model):
-    """
-    Основная модель поездки.
-    Используется для хранения информации о заказе.
-    """
     id = fields.BigIntField(pk=True)
     id_user = fields.BigIntField(null=False)
     id_driver = fields.BigIntField(null=True)
@@ -42,9 +34,6 @@ class DataOrder(Model):
 
 
 class WaitDataOrder(Model):
-    """
-    Модель не используется. Удалить.
-    """
     id = fields.BigIntField(pk=True)
     id_user = fields.BigIntField(null=False)
     id_status = fields.BigIntField(null=False)
@@ -62,11 +51,6 @@ class WaitDataOrder(Model):
 
 
 class DataOrderAddresses(Model):
-    """
-    Используется для хранения информации о промежуточных точках заказа.
-    Данные не шифруются.
-    Ссылается на модель DataOrder.
-    """
     id = fields.BigIntField(pk=True)
     id_order = fields.BigIntField(null=False)
     from_address = fields.TextField()
@@ -87,9 +71,6 @@ class DataOrderAddresses(Model):
 
 
 class WaitDataOrderAddresses(Model):
-    """
-    Модель не используется. Удалить.
-    """
     id = fields.BigIntField(pk=True)
     id_order = fields.BigIntField(null=False)
     from_address = fields.TextField()
@@ -110,11 +91,6 @@ class WaitDataOrderAddresses(Model):
 
 
 class DataOrderInfo(Model):
-    """
-    Используется для хранения дополнительной информации о заказе.
-    Геолокация клиента в модели необязательна, можно удалить.
-    Ссылается на модель DataOrder.
-    """
     id = fields.BigIntField(pk=True)
     id_order = fields.BigIntField(null=False)
     client_lon = fields.FloatField()
@@ -135,9 +111,6 @@ class DataOrderInfo(Model):
 
 
 class WaitDataOrderInfo(Model):
-    """
-    Модель не используется. Удалить.
-    """
     id = fields.BigIntField(pk=True)
     id_order = fields.BigIntField(null=False)
     client_lon = fields.FloatField()
@@ -159,11 +132,6 @@ class WaitDataOrderInfo(Model):
 
 
 class WaitDataSearchDriver(Model):
-    """
-    Старая модель для хранения токена WebSocket для подключения клиента к поиску водителя.
-    Удалить.
-    Ссылается на UsersUser, DataOrder.
-    """
     id = fields.BigIntField(pk=True)
     id_user = fields.BigIntField(null=False)
     id_order = fields.BigIntField(null=False)
@@ -179,10 +147,6 @@ class WaitDataSearchDriver(Model):
 
 
 class DataSchedule(Model):
-    """
-    Основная модель графика поездок.
-    Ссылается на UsersUser, DataCarTariff.
-    """
     id = fields.BigIntField(pk=True)
     id_user = fields.BigIntField(null=False)
     title = fields.TextField(null=True)
@@ -204,10 +168,6 @@ class DataSchedule(Model):
 
 
 class DataScheduleRoad(Model):
-    """
-    Используется для хранения информации о маршрутах графиков поездок.
-    Ссылается на модель DataSchedule.
-    """
     id = fields.BigIntField(pk=True)
     id_schedule = fields.BigIntField(null=False)
     week_day = fields.BigIntField()
@@ -229,10 +189,6 @@ class DataScheduleRoad(Model):
 
 
 class DataScheduleRoadAddress(Model):
-    """
-    Используется для хранения информации об адрессах маршрутов графика.
-    Ссылается на модель DataScheduleRoad.
-    """
     id = fields.BigIntField(pk=True)
     id_schedule_road = fields.BigIntField(null=False)
     from_address = fields.TextField()
@@ -252,10 +208,6 @@ class DataScheduleRoadAddress(Model):
 
 
 class DataScheduleOtherParametrs(Model):
-    """
-    Используется для хранения дополнительных параметров графика (доп услуги).
-    Ссылается на DataSchedule, DataOtherParametrs
-    """
     id = fields.BigIntField(pk=True)
     id_schedule = fields.BigIntField(null=False)
     id_other_parametr = fields.BigIntField(null=False)
@@ -273,12 +225,6 @@ class DataScheduleOtherParametrs(Model):
 
 
 class DataScheduleRoadDriver(Model):
-    """
-    Используется для связи графиков и маршрутов графиков с водителем.
-    Содержит информацию о типе поездки.
-    Ссылается на UsersUser, DataScheduleRoad.
-    id_order удалить, не требуется в алгоритме и модели.
-    """
     id = fields.BigIntField(pk=True)
     id_schedule_road = fields.BigIntField(null=False)
     id_driver = fields.BigIntField(null=False)
@@ -297,10 +243,6 @@ class DataScheduleRoadDriver(Model):
 
 
 class WaitDataScheduleRoadDriver(Model):
-    """
-    Используется для хранения заявок водителей на принятие маршрутов графиков.
-    Ссылается на UsersUser, DataSchedule, DataScheduleRoad.
-    """
     id = fields.BigIntField(pk=True)
     id_road = fields.BigIntField(null=False)
     id_schedule = fields.BigIntField(null=False)
@@ -318,9 +260,6 @@ class WaitDataScheduleRoadDriver(Model):
 
 
 class UsersUserOrder(Model):
-    """
-    Используется для хранения токена WebSocket и связи между пользователем и заказом.
-    """
     id = fields.BigIntField(pk=True)
     id_user = fields.BigIntField(null=False)
     id_order = fields.BigIntField(null=False)

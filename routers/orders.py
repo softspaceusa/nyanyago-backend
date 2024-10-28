@@ -1,18 +1,18 @@
-import time
+from tortoise.exceptions import DoesNotExist
 
 from const.const import success_answer
 from const.dependency import has_access_parent
 from const.login_const import forbidden
 from models.chats_db import ChatsChatParticipant, ChatsChat
-from models.drivers_db import UsersDriverData, UsersCar
+from models.drivers_db import UsersDriverData, UsersCar, DataDriverMode
 from models.static_data_db import DataCarTariff, DataOtherDriveParametr, DataCarMark, DataCarModel, DataColor
 from const.orders_const import CurrentDrive, you_have_active_drive, start_current_drive, NewSchedule, get_schedule, \
     schedule_not_found, tariff_by_id_not_found, get_schedules, Road, UpdateRoad, get_schedule_road, \
-    get_schedule_responses, AnswerResponse, get_onetime_prices, start_onetime_drive, get_orders
+    get_schedule_responses, AnswerResponse, get_onetime_prices, get_orders
 from const.static_data_const import access_forbidden, DictToModel, not_user_photo
 from models.users_db import UsersUser, UsersUserPhoto, HistoryNotification, UsersFranchiseUser
 from models.authentication_db import UsersUserAccount, UsersBearerToken
-from fastapi import APIRouter, Request, Depends
+from fastapi import APIRouter, Request, Depends, HTTPException
 from defs import check_access_schedule, sendPush, get_time_drive, get_order_data
 from models.orders_db import *
 from const.drivers_const import *
@@ -283,10 +283,15 @@ async def create_schedule_road(request: Request, id: int, item: Road):
             responses=generate_responses([success_answer,
                                           schedule_not_found]))
 async def update_schedule_road(request: Request, item: UpdateRoad):
+    print(item.id)
     road = await DataScheduleRoad.filter(id=item.id, isActive=True).first().values()
     if road is None or len(road) == 0:
+        print("zalupa")
         return schedule_not_found
-    if await DataSchedule.filter(id=road["id_schedule"], id_user=request.user, isActive__not=None).count() == 0:
+    if await DataSchedule.filter(id=road["id_schedule"], id_user=request.user, isActive=True).count() == 0:
+        print("vertihvost")
+        print(request.user)
+        print(road["id_schedule"])
         return schedule_not_found
     if item.title is not None and len(item.title) > 0 and road["title"] != item.title:
         await DataScheduleRoad.filter(id=item.id).update(title=item.title)
@@ -299,7 +304,7 @@ async def update_schedule_road(request: Request, item: UpdateRoad):
     if item.type_drive is not None and len(item.type_drive) > 0:
         await DataScheduleRoad.filter(id=item.id).update(type_drive=";".join(map(str, item.type_drive)))
     if item.addresses is not None and len(item.addresses) > 0:
-        await DataScheduleRoadAddress.filter(id_schedule=item.id).delete()
+        await DataScheduleRoadAddress.filter(id_schedule_road=item.id).delete()
         for address in item.addresses:
             await DataScheduleRoadAddress.create(id_schedule_road=item.id,
                                                  from_address=address.from_address.address,
@@ -361,54 +366,59 @@ async def get_schedule_road(id: int):
 @router.get("/get_current_order",
             responses=generate_responses([access_forbidden, get_orders]))
 async def get_current_order_data(request: Request):
-    user = DictToModel(await UsersUser.filter(id=request.user).first().values())
-    user_type = DictToModel(await UsersUserAccount.filter(id_user=request.user).first().values())
-    if user_type.id_type_account not in [1, 2]:
+    """ Получение всех активных заказов """
+    user = await UsersUser.filter(id=request.user).first()
+
+    if not user:
+        return access_forbidden
+
+    user_types = await UsersUserAccount.filter(id_user=request.user).all()
+
+    if not user_types or not any(user_type.id_type_account in [1, 2] for user_type in user_types):
         return access_forbidden
 
     current_orders = []
 
-    # Если пользователь — родитель (id_type_account == 1)
-    if user_type.id_type_account == 1:
-        current_orders = await DataOrder.filter(id_user=request.user, isActive=True).all()
+    current_orders += await DataOrder.filter(id_user=request.user, isActive=True).all()
+    current_orders += await DataOrder.filter(id_driver=request.user, isActive=True).all()
 
-    # Если пользователь — водитель (id_type_account == 2)
-    elif user_type.id_type_account == 2:
-        current_order = await DataOrder.filter(id_driver=request.user, isActive=True).first()
-        if current_order:
-            current_orders.append(current_order)
-
-    # Проверка на наличие активных заказов
     if not current_orders:
         return JSONResponse({"status": False, "message": "No active orders found."})
 
     orders_data = []
 
     for current_order in current_orders:
-        user_info = await UsersUser.filter(id=current_order.id_user).first()
-        user_photo = await UsersUserPhoto.filter(id_user=current_order.id_user).first()
-        user_photo_url = user_photo.photo_path if user_photo else None
+        if not current_order:
+            continue
 
+        user_info = await UsersUser.filter(id=current_order.id_user).first()
+        if not user_info:
+            continue
+
+        user_photo = await UsersUserPhoto.filter(id_user=current_order.id_user).first()
         order_info = await DataOrderInfo.filter(id_order=current_order.id).first()
         order_addresses = await DataOrderAddresses.filter(id_order=current_order.id).all()
 
+        if not order_info or not order_addresses:
+            continue
+
         order_data = {
-            "id_user": user_info.id,
             "id_order": current_order.id,
-            "username": user_info.name if user_info else None,
-            "phone": user_info.phone if user_info else None,
-            "user_photo": user_photo_url,
-            "amount": order_info.price if order_info else 0.0,
+            "id_user": user_info.id,
+            "username": user_info.name,
+            "phone": user_info.phone,
+            "user_photo": user_photo.photo_path if user_photo else None,
+            "amount": float(order_info.price),
             "id_status": current_order.id_status,
             "addresses": [{
                 "from": addr.from_address,
-                "isFinish": "true" if addr.isArrived else "false",
+                "isFinish": addr.isFinish,
                 "to": addr.to_address,
                 "from_lat": addr.from_lat,
                 "from_lon": addr.from_lon,
                 "to_lat": addr.to_lat,
                 "to_lon": addr.to_lon,
-                "duration": order_info.duration if order_info else 0
+                "duration": order_info.duration
             } for addr in order_addresses]
         }
 
@@ -645,3 +655,32 @@ async def get_onetime_orders(request: Request, type_order: int):
                          "message": "Success!",
                          "orders": answer})
 
+
+@router.get("/get_driver_token")
+async def get_driver_token(request: Request):
+    try:
+        driver_mode = await DataDriverMode.filter(id_driver=request.user).first()
+        if not driver_mode:
+            raise HTTPException(status_code=404, detail="Driver token not found")
+
+        return JSONResponse({"websocket_token": driver_mode.websocket_token})
+
+    except DoesNotExist:
+        raise HTTPException(status_code=404, detail="Driver not found")
+
+
+@router.get("/get_client_token")
+async def get_client_token(request: Request):
+    try:
+        user_orders = await UsersUserOrder.filter(id_user=request.user).all()
+        if not user_orders:
+            raise HTTPException(status_code=404, detail="Driver token not found")
+
+        result = {}
+        for user_order in user_orders:
+            result["websocket_token"] = user_order.token
+            result["id_order"] = user_order.id_order
+        return JSONResponse(result)
+
+    except DoesNotExist:
+        raise HTTPException(status_code=404, detail="Client not found")
