@@ -3,6 +3,10 @@ from tortoise.models import Model
 
 
 class UsersUser(Model):
+    """
+    Используется для хранения информации о пользователях.
+    Номер телефона не шифруется, но приведен к общему стандарту.
+    """
     id = fields.BigIntField(pk=True)
     surname = fields.TextField(null=True)
     name = fields.TextField(null=True)
@@ -20,6 +24,10 @@ class UsersUser(Model):
 
 
 class UsersReferalUser(Model):
+    """
+    Используется для хранения информации о рефералах пользователей (партнера и водителя).
+    Ссылается на модель UsersUser.
+    """
     id = fields.BigIntField(pk=True)
     id_user = fields.BigIntField(null=False)
     id_user_referal = fields.BigIntField(null=False)
@@ -35,6 +43,10 @@ class UsersReferalUser(Model):
 
 
 class UsersVerifyAccount(Model):
+    """
+    Используется для хранении информации о пользователях, которые могут авторизововаться в приложении (Подтвержденные).
+    Ссылается на модель UsersUser.
+    """
     id = fields.BigIntField(pk=True)
     id_user = fields.BigIntField(null=False)
 
@@ -48,6 +60,10 @@ class UsersVerifyAccount(Model):
 
 
 class UsersUserPhoto(Model):
+    """
+    Используется для хранении пользовательской аватарки.
+    Ссылается на модель UsersUser.
+    """
     id = fields.BigIntField(pk=True)
     id_user = fields.BigIntField(null=False)
     photo_path = fields.TextField()
@@ -62,6 +78,9 @@ class UsersUserPhoto(Model):
 
 
 class WaitDataVerifyRegistration(Model):
+    """
+    Используется для хранении номеров, которые проходят этап регистрации, но не были подтверждены кодом.
+    """
     id = fields.BigIntField(pk=True)
     phone = fields.TextField()
 
@@ -75,6 +94,10 @@ class WaitDataVerifyRegistration(Model):
 
 
 class DataTaskBalanceHistory(Model):
+    """
+    Модель используется для хранения типов платежных операций.
+    Можно заменить на константы.
+    """
     id = fields.BigIntField(pk=True)
     title = fields.TextField()
 
@@ -88,6 +111,10 @@ class DataTaskBalanceHistory(Model):
 
 
 class DataUserBalance(Model):
+    """
+    Используется для храненя текущего баланса пользователей (Клиент, Водитель, Партнёр).
+    Ссылается на модель UsersUser.
+    """
     id = fields.BigIntField(pk=True)
     id_user = fields.BigIntField(null=False)
     money = fields.DecimalField(10, 2)
@@ -102,6 +129,10 @@ class DataUserBalance(Model):
 
 
 class DataUserBalanceHistory(Model):
+    """
+    Используется для хранения историй платежей пользоватей.
+    Ссылается на модель UsersUser,
+    """
     id = fields.BigIntField(pk=True)
     id_user = fields.BigIntField(null=False)
     id_task = fields.BigIntField(null=True)
@@ -120,6 +151,10 @@ class DataUserBalanceHistory(Model):
 
 
 class DataDebitCard(Model):
+    """
+    Модель должна использоваться для хранения части информации банковских карт (последних цифр карты, срока годности).
+    Ссылается на модель UsersUser.
+    """
     id = fields.BigIntField(pk=True)
     id_user = fields.BigIntField(null=False)
     card_number = fields.TextField()
@@ -138,6 +173,12 @@ class DataDebitCard(Model):
 
 
 class HistoryRequestPayment(Model):
+    """
+    Используется для хранения истории платежей (выплаты).
+    Удалить ссылку на карту пользователя.
+    Изменить логику и подстроить модель данных.
+    Ссылается на модель UsersUser.
+    """
     id = fields.BigIntField(pk=True)
     id_user = fields.BigIntField(null=False)
     id_card = fields.BigIntField(null=False)
@@ -158,6 +199,10 @@ class HistoryRequestPayment(Model):
 
 
 class UsersFranchiseUser(Model):
+    """
+    Используется для хранения информации о принадлежании пользователя к франшизе.
+    Ссылается на модель UsersUser, UsersFranchise
+    """
     id = fields.BigIntField(pk=True)
     id_user = fields.BigIntField(null=False)
     id_franchise = fields.BigIntField(null=False)
@@ -172,6 +217,9 @@ class UsersFranchiseUser(Model):
 
 
 class HistoryPaymentTink(Model):
+    """
+    Удалить модель. Не имеем права так делать. Реализовать логику платежей с нуля.
+    """
     id = fields.BigIntField(pk=True)
     id_user = fields.BigIntField(null=False)
     id_payment = fields.TextField()
@@ -192,6 +240,9 @@ class HistoryPaymentTink(Model):
 
 
 class WaitDataPaymentTink(Model):
+    """
+    Удалить модель. Не имеем права так делать. Реализовать логику платежей с нуля.
+    """
     id = fields.BigIntField(pk=True)
     id_user = fields.BigIntField(null=False)
     id_payment = fields.TextField()
@@ -213,6 +264,9 @@ class WaitDataPaymentTink(Model):
 
 
 class UsersFranchise(Model):
+    """
+    Используется для хранения информации о франшизах проекта.
+    """
     id = fields.BigIntField(pk=True)
     title = fields.TextField(null=True)
     description = fields.TextField(null=True)
@@ -229,6 +283,10 @@ class UsersFranchise(Model):
 
 
 class UsersFranchiseCity(Model):
+    """
+    Используется для связи города и франшизы (многие ко многим).
+    Ссылается на модель DataCity, UsersFranchise.
+    """
     id = fields.BigIntField(pk=True)
     id_franchise = fields.BigIntField(null=False)
     id_city = fields.BigIntField(null=False)
@@ -243,6 +301,10 @@ class UsersFranchiseCity(Model):
 
 
 class HistoryNotification(Model):
+    """
+    Используется для хранения информации об ранее отправленных push уведомлений пользователям.
+    Не требуется по ТЗ, можно удалить.
+    """
     id = fields.BigIntField(pk=True)
     id_user = fields.BigIntField(null=False)
     title = fields.TextField(null=True)
@@ -260,6 +322,11 @@ class HistoryNotification(Model):
 
 
 class UsersUserVk(Model):
+    """
+    Используется для хранения информации о связи пользователя и авторизации через ВКонтакте.
+    Ссылается на UsersUser.
+    Можно оптимизировать, объединив модель с данными UsersUserYandex, ддобавив флаг на тип сервиса.
+    """
     id = fields.BigIntField(pk=True)
     id_user = fields.BigIntField(null=False)
     vk_id = fields.TextField(null=True)
@@ -274,6 +341,12 @@ class UsersUserVk(Model):
 
 
 class UsersUserYandex(Model):
+    """
+    Используется для хранения информации о связи пользователя и авторизации через Яндекс.
+    Ссылается на UsersUser.
+    Можно оптимизировать, объединив модель с данными UsersUserVk, ддобавив флаг на тип сервиса.
+    """
+
     id = fields.BigIntField(pk=True)
     id_user = fields.BigIntField(null=False)
     yandex_id = fields.TextField(null=True)
@@ -288,6 +361,11 @@ class UsersUserYandex(Model):
 
 
 class UsersPaymentClient(Model):
+    """
+    Необходима для хранения ключей оплаты для автопополнения баланса по запросу пользователя.
+    Ссылается на UsersUser.
+    Данные не шифруются.
+    """
     id = fields.BigIntField(pk=True)
     id_user = fields.BigIntField(null=False)
     customer_key = fields.TextField(null=False)
