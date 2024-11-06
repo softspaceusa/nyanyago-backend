@@ -166,7 +166,7 @@ async def get_schedule(request: Request, id: int):
 async def get_schedule(request: Request):
     schedules = await DataSchedule.filter(id_user=request.user, isActive__in=[True, False]
                                          ).all().values("id", "title", "description", "children_count",
-                                                        "id_tariff", "week_days", "duration", "id_user")
+                                                        "id_tariff", "week_days", "duration", "id_user", "isActive")
     for schedule in schedules:
         schedule["week_days"] = [int(x) for x in schedule["week_days"].split(";")]
         other_parametrs = await DataScheduleOtherParametrs.filter(id_schedule=schedule["id"],
