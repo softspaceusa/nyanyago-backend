@@ -443,4 +443,8 @@ async def get_order_data(order):
                                             "to_lon": each["to_lon"],"duration": duration})
         return answer
     except Exception:
+<<<<<<< HEAD
         await error(traceback.format_exc())
+=======
+        await error(traceback.format_exc())
+>>>>>>> develop
