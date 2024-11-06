@@ -1,0 +1,20 @@
+services:
+  db:
+    image: postgres:15
+    restart: always
+    volumes:
+      - app-db-data:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_USER=api_auto_nanny
+      - POSTGRES_PASSWORD=8yWcJm48c37
+      - PGDATA=/var/lib/postgresql/data
+      - POSTGRES_DB=api_nanny
+    ports:
+      - "5432:5432"
+
+volumes:
+  app-db-data:
+
+networks:
+  postgres:
+    external: True

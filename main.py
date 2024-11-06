@@ -190,10 +190,14 @@ def custom_openapi():
 
 app.openapi = custom_openapi
 
+db_url = "postgres://api_auto_nanny:8yWcJm48c37*c~%yM72H@77.232.137.74:5432/api_nanny"
+
+#for local docker-compose BD url
+#db_url = "postgres://api_auto_nanny:8yWcJm48c37@127.0.0.1:5432/api_nanny"
 
 register_tortoise(
     app,
-    db_url="postgres://api_auto_nanny:8yWcJm48c37*c~%yM72H@77.232.137.74:5432/api_nanny",
+    db_url=db_url,
     modules={"models": ["models.authentication_db", "models.files_db", "models.users_db", "models.drivers_db",
                         "models.static_data_db", "models.chats_db", "models.admins_db", "models.orders_db"]},
     generate_schemas=True,
