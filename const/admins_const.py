@@ -1,6 +1,8 @@
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel
-from typing import Union, List
+from fastapi.encoders import jsonable_encoder
+from pydantic import BaseModel, RootModel, ConfigDict
+from typing import Union, List, Dict
+from datetime import date
 
 success_answer = JSONResponse({"status": True,
                                "message": "Success!"})
@@ -123,3 +125,22 @@ class GetUsers(BaseModel):
     limit: Union[int, None] = 50
     statuses: Union[list, None] = []
 
+
+class Salary(RootModel):
+    root: Dict[date, int]
+
+    model_config = ConfigDict(json_schema_extra={
+        'example': {
+            "2024-01-01": 0,
+        },
+    })
+
+class SuccessGetSalary(BaseModel):
+    status: bool = True
+    message: str = "Success!"
+    salary: Salary
+
+class SuccessPostSalary(BaseModel):
+    status: bool = True
+    message: str = "Success!"
+    salary_report_file: Salary
