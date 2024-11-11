@@ -341,7 +341,7 @@ async def get_report_users(request: Request, period: int, type_period):
 @router.post("/report_sales",
              responses=generate_responses([]))
 async def get_file_report_sales(request: Request, start_date: date, end_date: date):
-    reporter = ReportMaker(HistoryPaymentTink)
+    reporter = ReportMaker(HistoryPaymentTink, "Salary")
     await reporter.create_report_by_period(start_date, end_date)
     report_file_name = await reporter.save_report_to_pdf(title="salary_report")
     response = SuccessPostSalary(salary_report_file=report_file_name)

@@ -143,4 +143,4 @@ class SuccessGetSalary(BaseModel):
 class SuccessPostSalary(BaseModel):
     status: bool = True
     message: str = "Success!"
-    salary_report_file: Salary
+    salary_report_file: str
