@@ -325,7 +325,7 @@ async def create_other_parametr_of_drive(item: OtherDriveParametr):
 
 @router.get("/report_sales")
 async def get_report_sales(request: Request, start_date: date, end_date: date) -> SuccessGetSalary:
-    reporter = ReportMaker(HistoryPaymentTink)
+    reporter = ReportMaker(HistoryPaymentTink, "Salary")
     report = await reporter.create_report_by_period(start_date, end_date)
     salary = Salary(report)
     response = SuccessGetSalary(salary=salary)
