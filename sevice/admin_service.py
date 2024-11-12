@@ -142,7 +142,7 @@ class ReportMaker:
             dates = []
 
             drawing.add(String(60, 120,
-                            f"Salary graphic for {table[1][0].strftime("%Y-%B")}",
+                            f"Salary graphic for {table[1][0].strftime('%Y-%B')}",
                             fontName='Times-Roman',
                             fontSize=36))
 
