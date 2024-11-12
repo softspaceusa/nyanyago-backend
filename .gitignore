@@ -144,3 +144,4 @@ csscomb.json
 /privkey.pem
 /api_nanny_dump.sql
 /salary_report_*.pdf
+/models/db_backup_an.sql

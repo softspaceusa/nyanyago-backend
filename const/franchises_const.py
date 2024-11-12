@@ -40,6 +40,24 @@ get_my_referals = JSONResponse({"status": True,
                                  }})
 
 
+get_money_stats = JSONResponse({"status": True,
+                                "message": "Success!",
+                                "minus": {
+                                    "spending_on_drivers": 0,
+                                    "spending_on_bonuses": 0, },
+                                "plus": {
+                                    "received_due_to_commission": 0,
+                                    "received_due_to_users": 0}})
+
+
+incorrect_period = JSONResponse({"status": False,
+                                 "message": "The period must be 0 or negative",
+                                 }, status_code=400)
+
+incorrect_user = JSONResponse({"status": False,
+                              "message": "Current users do not belong to any franchise",
+                               }, status_code=400)
+
 
 class OutputPayment(BaseModel):
     id_payment: int
