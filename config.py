@@ -3,14 +3,11 @@ from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
     app_name: str = "AutoNanny"
-    db_user: str
-    db_password: str
-    db_host: str
-    db_name: str
     ssl_certfile: str = "fullchain.pem"
     ssl_keyfile: str = "privkey.pem"
-    port: int = 443
+    port: int = 4443
     log_level: str = "debug"
+    report_file_path: str = "./"
 
     class Config:
         env_file = ".env"

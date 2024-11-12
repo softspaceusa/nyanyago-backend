@@ -2,13 +2,16 @@ from const.static_data_const import not_user_photo, not_found_other_parametr,Oth
 from models.authentication_db import UsersUserAccount, UsersReferalCode, UsersAuthorizationData, UsersBearerToken
 from models.users_db import UsersUser, UsersVerifyAccount, UsersUserPhoto, UsersReferalUser, UsersFranchise, \
     UsersFranchiseCity
-from models.users_db import UsersFranchiseUser
+from models.users_db import UsersFranchiseUser, HistoryPaymentTink
 from const.login_const import uncorrect_phone, user_already_creates
 from defs import check_correct_phone, error, get_date_from_datetime
 from models.chats_db import ChatsChatParticipant, ChatsChat
 from models.static_data_db import DataOtherDriveParametr, DataCity, DataCarTariff
 from models.admins_db import AdminMobileSettings
 from models.drivers_db import UsersDriverData
+from sevice.admin_service import ReportMaker
+from common.logger import logger
+
 from fastapi.responses import FileResponse
 from fastapi import APIRouter, Request
 from const.admins_const import *
@@ -320,10 +323,13 @@ async def create_other_parametr_of_drive(item: OtherDriveParametr):
     return success_answer
 
 
-@router.get("/report_sales",
-            responses=generate_responses([]))
-async def get_report_sales(request: Request, period: int, type_period):
-    return success_answer
+@router.get("/report_sales")
+async def get_report_sales(request: Request, start_date: date, end_date: date) -> SuccessGetSalary:
+    reporter = ReportMaker(HistoryPaymentTink, "Salary")
+    report = await reporter.create_report_by_period(start_date, end_date)
+    salary = Salary(report)
+    response = SuccessGetSalary(salary=salary)
+    return response
 
 
 @router.get("/report_users",
@@ -334,8 +340,12 @@ async def get_report_users(request: Request, period: int, type_period):
 
 @router.post("/report_sales",
              responses=generate_responses([]))
-async def get_file_report_sales(request: Request, period: int, type_period):
-    return "root/files/ChildrenPorpularVideo.mp4"
+async def get_file_report_sales(request: Request, start_date: date, end_date: date):
+    reporter = ReportMaker(HistoryPaymentTink, "Salary")
+    await reporter.create_report_by_period(start_date, end_date)
+    report_file_name = await reporter.save_report_to_pdf(title="salary_report")
+    response = SuccessPostSalary(salary_report_file=report_file_name)
+    return response
 
 
 @router.post("/report_users",

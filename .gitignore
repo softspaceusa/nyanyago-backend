@@ -143,3 +143,4 @@ csscomb.json
 /log_error.txt
 /privkey.pem
 /api_nanny_dump.sql
+/salary_report_*.pdf
