@@ -1,27 +1,32 @@
-from decimal import Decimal
-
-from const.users_const import UpdateUserData, success_answer, SbpPayment, start_sbp_answer, StartPayment, LimitOffset, \
-    task_to_text
-from const.users_const import DeleteDebitCard, AddMoney, UserDataPayment, order_not_found, ConfirmPayment, get_money
-from const.users_const import debit_card_not_found, get_my_card
-from models.users_db import UsersUser, UsersUserPhoto, UsersVerifyAccount, DataDebitCard, DataUserBalance, \
-    UsersPaymentClient
-from models.users_db import DataUserBalanceHistory, HistoryPaymentTink, WaitDataPaymentTink
-from models.authentication_db import UsersUserAccount, UsersReferalCode, UsersAuthorizationData, \
-    UsersMobileAuthentication
-from models.static_data_db import DataColor, DataCarModel, DataCarMark, DataTypeAccount
-from const.static_data_const import not_user_photo, access_forbidden, DictToModel
-from defs import get_websocket_token
-from models.drivers_db import UsersDriverData, UsersCar
-from fastapi import APIRouter, Request, HTTPException, Query
-from const.drivers_const import *
-import requests
 import datetime
-import hashlib
 import decimal
-import random
+import hashlib
 import json
+import random
 import uuid
+
+import requests
+from const.drivers_const import *
+from const.static_data_const import (DictToModel, access_forbidden,
+                                     not_user_photo)
+from const.users_const import (AddMoney, ConfirmPayment, DeleteDebitCard,
+                               LimitOffset, SbpPayment, StartPayment,
+                               UpdateUserData, UserDataPayment,
+                               debit_card_not_found, get_money, get_my_card,
+                               order_not_found, start_sbp_answer,
+                               success_answer, task_to_text)
+from defs import get_websocket_token
+from fastapi import APIRouter, HTTPException, Query, Request
+from models.authentication_db import (UsersAuthorizationData,
+                                      UsersMobileAuthentication,
+                                      UsersReferalCode, UsersUserAccount)
+from models.drivers_db import UsersCar, UsersDriverData
+from models.static_data_db import (DataCarMark, DataCarModel, DataColor,
+                                   DataTypeAccount)
+from models.users_db import (DataDebitCard, DataUserBalance,
+                             DataUserBalanceHistory, HistoryPaymentTink,
+                             UsersPaymentClient, UsersUser, UsersUserPhoto,
+                             UsersVerifyAccount, WaitDataPaymentTink)
 
 
 router = APIRouter()
@@ -106,23 +111,82 @@ async def get_me(request: Request):
                              }})
 
 
-@router.put("/update_me",
-            responses=generate_responses([success_answer,
-                                          access_forbidden]))
+@router.put(
+    "/update_me", responses=generate_responses([success_answer, access_forbidden])
+)
 async def update_me_data(request: Request, item: UpdateUserData):
+    """
+    Обновляет данные пользователя.
+
+    Args:
+        request (Request): Запрос.
+        item (UpdateUserData): Данные пользователя.
+    Example:
+         Пример верных данных:
+         item = {"surname": "string",
+                "name": "string",
+                "phone": "+7 (978) 227 26 58",
+                "password": "string1A#"
+                }
+
+         Пример неверных данных:
+         item = {"surname": "string123",
+                "name": "string123",
+                "phone": "+7 (978) 227 2658",
+                "password": "string"
+                }
+
+        Пример ответа при неверных входных данных:
+        {
+          "detail": [
+            {
+              "type": "string_too_short",
+              "loc": [
+                "body",
+                "password"
+              ],
+              "msg": "String should have at least 8 characters",
+              "input": "string",
+              "ctx": {
+                "min_length": 8
+              }
+            }
+          ]
+        }
+
+    Returns:
+        JSONResponse: Сообщение об успешном обновлении данных, либо сообщение об ошибке.
+    """
+
     user = DictToModel(await UsersUser.filter(id=request.user).first().values())
     user_photo = await UsersUserPhoto.filter(id_user=request.user).first().values()
     if item is not None:
-        if item.surname != user.surname and item.surname is not None and len(item.surname) > 0:
+        if (
+            item.surname != user.surname
+            and item.surname is not None
+            and len(item.surname) > 0
+        ):
             await UsersUser.filter(id=request.user).update(surname=item.surname)
         if item.name != user.name and item.name is not None and len(item.name) > 0:
             await UsersUser.filter(id=request.user).update(name=item.name)
         if item.password is not None and len(item.password) > 0:
-            await UsersAuthorizationData.filter(id_user=request.user).update(password=item.password)
-        if item.photo_path is not None and len(item.photo_path) > 0:
-            if user_photo is not None and "photo_path" in user_photo and item.photo_path != user_photo["photo_path"]:
-                await UsersUserPhoto.filter(id_user=request.user).delete()
-            await UsersUserPhoto.create(id_user=request.user, photo_path=item.photo_path)
+            await UsersAuthorizationData.filter(id_user=request.user).update(
+                password=str((hashlib.md5(item.password.encode())).hexdigest())  # noqa
+            )
+
+        if item.phone != user.phone and item.phone is not None and len(item.phone) > 0:
+            await UsersUser.filter(id=request.user).update(phone=item.phone)
+
+        if item.photo_path and len(item.photo_path) > 0:  # Может надо, может нет.
+            if user_photo and user_photo.get("photo_path") != item.photo_path:
+                await UsersUserPhoto.filter(id_user=request.user).update(
+                    photo_path=item.photo_path
+                )
+            elif not user_photo:
+                await UsersUserPhoto.create(
+                    id_user=request.user, photo_path=item.photo_path
+                )
+
         return success_answer
     return access_forbidden
 

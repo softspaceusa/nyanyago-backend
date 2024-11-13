@@ -1,5 +1,7 @@
+import re
+
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, field_validator
 from typing import Union
 
 
@@ -71,10 +73,45 @@ task_to_text = {
 
 
 class UpdateUserData(BaseModel):
-    surname: Union[str, None] = None
-    name: Union[str, None] = None
-    photo_path: Union[str, None] = None
-    password: Union[str, None] = None
+    surname: str = Field(
+        min_length=2,
+        max_length=50,
+        pattern="^[a-zA-Z]+$",
+        description="Surname should contain only Latin letters.",
+    )
+    name: str = Field(
+        min_length=2,
+        max_length=50,
+        pattern="^[a-zA-Z]+$",
+        description="Name should contain only Latin letters.",
+    )
+    photo_path: Union[str, None] = None  # Может быть надо, может нет. Пока оставлю
+    phone: str = Field(
+        pattern=r"^\+7 \(\d{3}\) \d{3} \d{2} \d{2}$",
+        description="Phone format: '+7 (999) 999 99 99'",
+    )
+    password: str = Field(
+        min_length=8,
+        description="Password with min 8 characters, containing at least one uppercase letter, one digit, and one special character",
+    )
+
+    @field_validator("password")
+    def validate_password(cls, value):  # noqa
+        if " " in value:
+            raise ValueError("Password should not contain spaces")
+        if not re.search(r"[A-Z]", value):
+            raise ValueError("Password must contain at least one uppercase letter")
+        if not re.search(r"[0-9]", value):
+            raise ValueError("Password must contain at least one digit")
+        if not re.search(r"[!#$%&?]", value):
+            raise ValueError(
+                "Password must contain at least one special character from !#$%&?"
+            )
+        if not re.search(r"^[A-Za-z0-9!#$%&?]+$", value):
+            raise ValueError(
+                "Password should only contain Latin letters, digits, and special characters !#$%&?"
+            )
+        return value
 
 
 class NewDebitCard(BaseModel):
