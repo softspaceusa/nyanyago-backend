@@ -126,7 +126,7 @@ class GetUsers(BaseModel):
     statuses: Union[list, None] = []
 
 
-class Salary(RootModel):
+class Report(RootModel):
     root: Dict[date, int]
 
     model_config = ConfigDict(json_schema_extra={
@@ -135,12 +135,26 @@ class Salary(RootModel):
         },
     })
 
+
 class SuccessGetSalary(BaseModel):
     status: bool = True
     message: str = "Success!"
-    salary: Salary
+    salary: Report
+
 
 class SuccessPostSalary(BaseModel):
     status: bool = True
     message: str = "Success!"
     salary_report_file: str
+
+
+class SuccessGetUserReport(BaseModel):
+    status: bool = True
+    message: str = "Success!"
+    user_report: Report
+
+
+class SuccessPostUserReport(BaseModel):
+    status: bool = True
+    message: str = "Success!"
+    user_report_file: str
