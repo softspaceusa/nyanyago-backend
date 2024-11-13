@@ -1,23 +1,31 @@
-from models.drivers_db import UsersDriverCard, UsersDriverData, UsersDriverAnswer, UsersCar
-from models.static_data_db import DataCarTariff
-from models.users_db import UsersUser, UsersUserPhoto, UsersVerifyAccount, UsersReferalUser, UsersFranchiseUser, \
-    DataUserBalance
-from models.users_db import HistoryRequestPayment, DataUserBalanceHistory
-from models.authentication_db import UsersUserAccount, UsersReferalCode, UsersAuthorizationData, WaitDataVerifyDriver
-from const.dependency import has_access_partner, has_access_franchise_admin, has_access_franchise
-from const.login_const import uncorrect_phone, user_already_creates
-from defs import check_correct_phone, error, get_date_from_datetime
-from const.static_data_const import not_user_photo, access_forbidden, get_tariffs
-from fastapi import APIRouter, Request, Depends
-from const.users_const import success_answer
-from const.franchises_const import *
-from const.admins_const import *
-from smsaero import SmsAero
-import traceback
 import decimal
 import hashlib
-import random
 import json
+import random
+import traceback
+from datetime import datetime
+
+from const.admins_const import *
+from const.dependency import (has_access_franchise, has_access_franchise_admin,
+                              has_access_partner)
+from const.franchises_const import *
+from const.login_const import uncorrect_phone, user_already_creates
+from const.static_data_const import (access_forbidden, get_tariffs,
+                                     not_user_photo)
+from const.users_const import success_answer
+from dateutil.relativedelta import relativedelta
+from defs import check_correct_phone, error, get_date_from_datetime
+from fastapi import APIRouter, Depends, Request
+from models.authentication_db import (UsersAuthorizationData, UsersReferalCode,
+                                      UsersUserAccount, WaitDataVerifyDriver)
+from models.drivers_db import (UsersCar, UsersDriverAnswer, UsersDriverCard,
+                               UsersDriverData)
+from models.static_data_db import DataCarTariff
+from models.users_db import (DataUserBalance, DataUserBalanceHistory,
+                             HistoryRequestPayment, UsersFranchiseUser,
+                             UsersReferalUser, UsersUser, UsersUserPhoto,
+                             UsersVerifyAccount)
+from smsaero import SmsAero
 
 
 router = APIRouter()
@@ -215,6 +223,131 @@ async def get_all_drivers(request: Request):
     return JSONResponse({"status": True,
                          "message": "Success!",
                          "drivers": result})
+
+
+@router.get(
+    "/money_stats",
+    responses=generate_responses([get_money_stats, incorrect_period, incorrect_user]),
+)
+async def get_stats(request: Request, period: int = 0):
+    """
+    Финансовая статистика по франшизе
+
+    Args:
+        request (Request): Запрос
+        period (int): Сдвиг по месяцу. Только неположительные значения.
+            (0 текущий месяц,
+            -1 предыдущий месяц и тд.)
+
+    Returns:
+        Сообщение о некорректном периоде или некорректном текущем пользователе
+
+        или
+
+        Статистику по расходам и доходам за заданный период
+    """
+
+    if period > 0:
+        return incorrect_period
+
+    today = datetime.today()
+    today_with_month_shift = today + relativedelta(months=period)
+    start_of_month = today_with_month_shift.replace(
+        day=1, hour=0, minute=0, second=0, microsecond=0
+    )
+    end_of_month = start_of_month + relativedelta(months=1)
+
+    current_user = (
+        await UsersFranchiseUser.filter(id_user=request.user)
+        .order_by("-id")
+        .first()
+        .values()
+    )
+
+    if not current_user:
+        return incorrect_user
+
+    all_franchise_members = (
+        await UsersFranchiseUser.filter(id_franchise=current_user["id_franchise"])
+        .all()
+        .values()
+    )
+    all_franchise_members_id = [x["id_user"] for x in all_franchise_members]
+
+    franchise_drivers = (
+        await UsersUserAccount.filter(
+            id_user__in=all_franchise_members_id, id_type_account=2
+        )
+        .all()
+        .values()
+    )
+    franchise_drivers_id = [x["id_user"] for x in franchise_drivers]
+
+    spending_on_drivers = (
+        await HistoryRequestPayment.filter(
+            id_user__in=franchise_drivers_id,
+            isSuccess=True,
+            isActive=False,
+            datetime_create__gte=start_of_month,
+            datetime_create__lt=end_of_month,
+        )
+        .all()
+        .values("money")
+    )
+    spending_on_drivers = sum(-float(x["money"]) for x in spending_on_drivers)
+
+    spending_on_bonuses = (
+        await DataUserBalanceHistory.filter(
+            id_user__in=all_franchise_members_id,
+            id_task=-2,
+            datetime_create__gte=start_of_month,
+            datetime_create__lt=end_of_month,
+        )
+        .all()
+        .values("money")
+    )
+    spending_on_bonuses = sum(-float(x["money"]) for x in spending_on_bonuses)
+
+    received_due_to_commission = (
+        await DataUserBalanceHistory.filter(
+            id_user__in=all_franchise_members_id,
+            id_task=-3,
+            datetime_create__gte=start_of_month,
+            datetime_create__lt=end_of_month,
+        )
+        .all()
+        .values("money")
+    )  # отрицательное значение
+    received_due_to_commission = sum(
+        -float(x["money"]) for x in received_due_to_commission
+    )
+
+    received_due_to_users = (
+        await DataUserBalanceHistory.filter(
+            id_user__in=all_franchise_members_id,
+            id_task=-1,
+            datetime_create__gte=start_of_month,
+            datetime_create__lt=end_of_month,
+        )
+        .all()
+        .values("money")
+    )
+    received_due_to_users = sum(float(x["money"]) for x in received_due_to_users)
+
+    return JSONResponse(
+        {
+            "status": True,
+            "message": "Success!",
+            "minus": {
+                "spending_on_drivers": spending_on_drivers,
+                "spending_on_bonuses": spending_on_bonuses,
+            },
+            "plus": {
+                "received_due_to_commission": received_due_to_commission,
+                "received_due_to_users": received_due_to_users,
+            },
+        }
+    )
 
 
 @router.post("/agree_payment_request",
