@@ -1,8 +1,10 @@
+import os
+
 from const.static_data_const import not_user_photo, not_found_other_parametr,OtherDriveParametr,UpdateOtherDriveParametr
 from models.authentication_db import UsersUserAccount, UsersReferalCode, UsersAuthorizationData, UsersBearerToken
 from models.users_db import UsersUser, UsersVerifyAccount, UsersUserPhoto, UsersReferalUser, UsersFranchise, \
     UsersFranchiseCity
-from models.users_db import UsersFranchiseUser, HistoryPaymentTink
+from models.users_db import UsersFranchiseUser, HistoryPaymentTink, UsersUser
 from const.login_const import uncorrect_phone, user_already_creates
 from defs import check_correct_phone, error, get_date_from_datetime
 from models.chats_db import ChatsChatParticipant, ChatsChat
@@ -14,6 +16,7 @@ from common.logger import logger
 
 from fastapi.responses import FileResponse
 from fastapi import APIRouter, Request
+from starlette.background import BackgroundTask
 from const.admins_const import *
 from tortoise.models import Q
 from smsaero import SmsAero
@@ -325,33 +328,49 @@ async def create_other_parametr_of_drive(item: OtherDriveParametr):
 
 @router.get("/report_sales")
 async def get_report_sales(request: Request, start_date: date, end_date: date) -> SuccessGetSalary:
-    reporter = ReportMaker(HistoryPaymentTink, "Salary")
+    reporter = ReportMaker(HistoryPaymentTink, "Salary", report_type="sum")
     report = await reporter.create_report_by_period(start_date, end_date)
-    salary = Salary(report)
+    salary = Report(report)
     response = SuccessGetSalary(salary=salary)
     return response
 
 
-@router.get("/report_users",
-            responses=generate_responses([]))
-async def get_report_users(request: Request, period: int, type_period):
-    return success_answer
-
-
 @router.post("/report_sales",
-             responses=generate_responses([]))
+             responses=generate_responses([]),
+             response_class=FileResponse)
 async def get_file_report_sales(request: Request, start_date: date, end_date: date):
-    reporter = ReportMaker(HistoryPaymentTink, "Salary")
+    reporter = ReportMaker(HistoryPaymentTink, "Salary", report_type="sum")
     await reporter.create_report_by_period(start_date, end_date)
-    report_file_name = await reporter.save_report_to_pdf(title="salary_report")
-    response = SuccessPostSalary(salary_report_file=report_file_name)
-    return response
+    report_file_path = await reporter.save_report_to_pdf(title="salary_report")
+    _, file_name = report_file_path.rsplit('/', 1)
+    return FileResponse(report_file_path, media_type="application/pdf", filename=file_name, background=BackgroundTask(os.remove, report_file_path))
+
+
+@router.get("/report_users")
+async def get_report_users(request: Request, start_date: date, end_date: date) -> SuccessGetUserReport:
+    try:
+        reporter = ReportMaker(UsersUser, "User register", report_type="count")
+        report = await reporter.create_report_by_period(start_date, end_date)
+        users = Report(report)
+    except:
+        logger.error("Can't to create report")
+    else:
+        response = SuccessGetUserReport(user_report=users)
+        return response
 
 
 @router.post("/report_users",
              responses=generate_responses([]),
              response_class=FileResponse)
-async def get_file_report_users(request: Request, period: int, type_period):
-    return "root/files/ChildrenPorpularVideo.mp4"
+async def get_file_report_users(request: Request, start_date: date, end_date: date):
+    try:
+        reporter = ReportMaker(UsersUser, "User register", report_type="count")
+        await reporter.create_report_by_period(start_date, end_date)
+        report_file_path = await reporter.save_report_to_pdf(title="user_report")
+        _, file_name = report_file_path.rsplit('/', 1)
+    except:
+        logger.error("Can't to create report and report file")
+    else:
+        return FileResponse(report_file_path, media_type="application/pdf", filename=file_name, background=BackgroundTask(os.remove, report_file_path))
 
 

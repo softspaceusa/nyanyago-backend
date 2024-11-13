@@ -5,8 +5,7 @@ from enum import Enum
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4, landscape
 from reportlab.lib.units import inch
-from reportlab.platypus import BaseDocTemplate, Table, TableStyle, Frame, PageTemplate, FrameBreak,PageBreak
-from reportlab.graphics import renderPDF
+from reportlab.platypus import BaseDocTemplate, Table, TableStyle, Frame, PageTemplate, FrameBreak, PageBreak
 from reportlab.graphics.shapes import Drawing, String
 from reportlab.graphics.charts.linecharts import HorizontalLineChart
 
@@ -16,16 +15,26 @@ from config import settings
 from common.logger import logger
 
 
+class ReportType(Enum):
+    COUNT = "count"
+    SUM = "sum"
+
+
 class ReportMaker:
+
     report_name: str
     report = None
-    _save_path: str = settings.report_file_path if settings.report_file_path[
-                                                       -1] != "/" else settings.report_file_path[:-1]
+    type_report: ReportType = None
+    _save_path: str = settings.report_file_path if settings.report_file_path[-1] != "/" \
+        else settings.report_file_path[:-1]
 
-
-    def __init__(self, model: Model, report_name: str):
+    def __init__(self,
+                 model: Model,
+                 report_name: str,
+                 report_type: ReportType):
         self.model = model
         self.report_name = report_name
+        self.type_report = report_type
 
     def _sum_by_day(self, data, sum_field):
         sums_by_day = {}
@@ -36,6 +45,16 @@ class ReportMaker:
             else:
                 sums_by_day[date] = row[sum_field]
         return sums_by_day
+
+    def _count_by_day(self, data):
+        counts_by_day = {}
+        for row in data:
+            date = row["datetime_create"].date()
+            if date in counts_by_day:
+                counts_by_day[date] += 1
+            else:
+                counts_by_day[date] = 1
+        return counts_by_day
 
     def _get_list_date(self, start_date, end_date):
         data_list = []
@@ -52,15 +71,17 @@ class ReportMaker:
         sorted_report = dict(sorted(self.report.items()))
         self.report = sorted_report
 
-
-
     async def create_report_by_period(self, start_date: datetime.date, end_date: datetime.date) -> Dict:
         payment_by_period = await self.model.filter(
             datetime_create__range=[str(start_date) + " 00:00:00", str(end_date) + " 23:59:59"]
         ).all().values()
         date_list = self._get_list_date(start_date, end_date)
         logger.debug(f"Next data from DB by period from {start_date} to {end_date}: {payment_by_period}")
-        self.report = self._sum_by_day(payment_by_period, "amount")
+        if self.type_report == ReportType.SUM.value:
+            self.report = self._sum_by_day(payment_by_period, "amount")
+        if self.type_report == ReportType.COUNT.value:
+            self.report = self._count_by_day(payment_by_period)
+        logger.debug(f"Next data will be filled spaces: {self.report}")
         self._full_report_empty_fields(date_list)
         logger.debug(f"Data will be return: {self.report}")
 
@@ -76,6 +97,7 @@ class ReportMaker:
             logger.error(f"Can't to create pdf doc. The error occures: {exp}")
             logger.error(traceback.format_exc())
         else:
+            logger.debug(f"A file was be created: {file_name}")
             return file_name
 
     class PdfReportMaker:
@@ -84,11 +106,12 @@ class ReportMaker:
         _table_columns: List[int] = ["date"]
         _max_value: int
         _min_value: int
-
+        report_title: str
 
         def __init__(self, file_name, data, report_name):
             self._table_columns.append(report_name)
             self.file_name = file_name
+            self.report_title = report_name
             try:
                 self._data_tables, self._max_value, self._min_value = self._convert_to_tables(data)
             except Exception as exp:
@@ -103,7 +126,6 @@ class ReportMaker:
             max_value = 0
             min_value = 0
             for key in data:
-                logger.debug(f"Key {key} add to table.")
                 if key.month == current_month:
                     current_table.append([key, data[key]])
                 else:
@@ -142,7 +164,7 @@ class ReportMaker:
             dates = []
 
             drawing.add(String(60, 120,
-                            f"Salary graphic for {table[1][0].strftime("%Y-%B")}",
+                            f"{self.report_title} graphic for {table[0][0].strftime("%Y-%B")}",
                             fontName='Times-Roman',
                             fontSize=36))
 
@@ -162,9 +184,8 @@ class ReportMaker:
             lc.categoryAxis.categoryNames = dates
             lc.categoryAxis.labels.boxAnchor = 'n'
             lc.valueAxis.valueMin = self._min_value
-            logger.debug(f"Use a {self._min_value}")
             lc.valueAxis.valueMax = self._max_value
-            lc.valueAxis.valueStep = self._max_value/10
+            lc.valueAxis.valueStep = self._max_value/10 if self._max_value>10 else 1
             lc.lines[0].strokeWidth = 2
             drawing.add(lc)
             return drawing
