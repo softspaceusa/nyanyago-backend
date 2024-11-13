@@ -58,6 +58,24 @@ incorrect_user = JSONResponse({"status": False,
                               "message": "Current users do not belong to any franchise",
                                }, status_code=400)
 
+get_franchise_driver_orders = JSONResponse(
+    {
+        "status": True,
+        "message": "Success!",
+        "orders": [
+            {
+                "id": 0,
+                "status": "string",
+                "name": "string",
+                "id_driver": 0,
+                "name_driver": "string",
+                "surname_driver": "string",
+            }
+        ],
+    }
+)
+
+
 
 class OutputPayment(BaseModel):
     id_payment: int

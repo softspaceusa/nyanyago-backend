@@ -20,6 +20,7 @@ from models.authentication_db import (UsersAuthorizationData, UsersReferalCode,
                                       UsersUserAccount, WaitDataVerifyDriver)
 from models.drivers_db import (UsersCar, UsersDriverAnswer, UsersDriverCard,
                                UsersDriverData)
+from models.orders_db import DataOrder, DataDrivingStatus, DataOrderAddresses
 from models.static_data_db import DataCarTariff
 from models.users_db import (DataUserBalance, DataUserBalanceHistory,
                              HistoryRequestPayment, UsersFranchiseUser,
@@ -348,6 +349,59 @@ async def get_stats(request: Request, period: int = 0):
             },
         }
     )
+
+
+@router.get(
+    "/franchise_driver_orders",
+    responses=generate_responses([get_franchise_driver_orders]),
+)
+async def get_franchise_driver_orders(driver_id: int):
+    """
+    Возвращает информацию о заказах водителя франшизы
+
+    Args:
+        driver_id (int): ID водителя
+
+    Returns:
+        Информация о заказах водителя франшизы
+    """
+    # TODO: Что значит "Проверить доступ на выплату % водителю"?
+    orders: list = (
+        await DataOrder.filter(id_driver=driver_id).order_by("id").all().values()
+    )
+
+    for order in orders:
+        # order["id"] = order["id"]
+        order_status: dict = (
+            await DataDrivingStatus.filter(id=order["id_status"])
+            .first()
+            .values("status")
+        )
+        order["status"] = order_status["status"]
+        order_address: dict = (
+            await DataOrderAddresses.filter(id_order=order["id"])
+            .first()
+            .values("from_address")
+        )
+        order["name"] = order_address[
+            "from_address"
+        ]  # TODO: У заказа нет имени. Возьмём в качестве него адрес отправления.
+        # order["id_driver"] = order["id_driver"]
+        order_driver_name_surname: dict = (
+            await UsersUser.filter(id=order["id_driver"])
+            .first()
+            .values("name", "surname")
+        )
+        order["name_driver"] = order_driver_name_surname["name"]
+        order["surname_driver"] = order_driver_name_surname["surname"]
+
+        order.pop("id_user")
+        order.pop("id_status")
+        order.pop("id_type_order")
+        order.pop("isActive")
+        order.pop("datetime_create")
+
+    return JSONResponse({"status": True, "message": "Success!", "orders": orders})
 
 
 @router.post("/agree_payment_request",
