@@ -365,35 +365,39 @@ async def get_franchise_driver_orders(driver_id: int):
     Returns:
         Информация о заказах водителя франшизы
     """
+
     # TODO: Что значит "Проверить доступ на выплату % водителю"?
-    orders: list = (
-        await DataOrder.filter(id_driver=driver_id).order_by("id").all().values()
-    )
+    orders: list = await DataOrder.filter(id_driver=driver_id).order_by(
+        "id").all().values()
 
     for order in orders:
         # order["id"] = order["id"]
         order_status: dict = (
-            await DataDrivingStatus.filter(id=order["id_status"])
-            .first()
-            .values("status")
+            await DataDrivingStatus.filter(id=order["id_status"]).first().values(
+                "status")
         )
-        order["status"] = order_status["status"]
+        order["status"] = order_status["status"] if order_status else "Unknown"
         order_address: dict = (
             await DataOrderAddresses.filter(id_order=order["id"])
             .first()
             .values("from_address")
         )
-        order["name"] = order_address[
-            "from_address"
-        ]  # TODO: У заказа нет имени. Возьмём в качестве него адрес отправления.
+        order["name"] = (
+            order_address["from_address"] if order_address else "Unknown"
+        )  # TODO: У заказа нет имени. Возьмём в качестве него адрес отправления.
         # order["id_driver"] = order["id_driver"]
         order_driver_name_surname: dict = (
-            await UsersUser.filter(id=order["id_driver"])
-            .first()
-            .values("name", "surname")
+            await UsersUser.filter(id=order["id_driver"]).first().values("name",
+                                                                         "surname")
         )
-        order["name_driver"] = order_driver_name_surname["name"]
-        order["surname_driver"] = order_driver_name_surname["surname"]
+        order["name_driver"] = (
+            order_driver_name_surname[
+                "name"] if order_driver_name_surname else "Unknown"
+        )
+        order["surname_driver"] = (
+            order_driver_name_surname[
+                "surname"] if order_driver_name_surname else "Unknown"
+        )
 
         order.pop("id_user")
         order.pop("id_status")
