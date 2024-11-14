@@ -170,16 +170,57 @@ async def get_payment_requests(request: Request):
                          "result": result})
 
 
-@router.get("/get_new_drivers",
-            responses=generate_responses([get_new_drivers,
-                                          not_found_request]))
+@router.get(
+    "/get_new_drivers",
+    responses=generate_responses([get_new_drivers, not_found_request]),
+)
 async def get_new_drivers_data(request: Request):
+    """
+    Возвращает все неподтверждённые аккаунты водителей франшизы
+
+    Args:
+        request (Request): Объект запроса
+
+    Example:
+        Пример успешного ответа:
+
+        {"status": True,
+        "message": "Success!",
+        "drivers": [
+            {
+                "id": 0,
+                "surname": "string",
+                "name": "string",
+                "phone": "string",
+                "photo_path": "string",
+                "request_for_payment": 0.0,
+                "status": "string",
+                "isActive": True,
+                "datetime_create": "string-iso"
+            }
+        ]}
+
+    Returns:
+        JSONResponse: Список неподтверждённых аккаунтов водителей
+    """
+
     if await WaitDataVerifyDriver.filter().count() == 0:
         return not_found_request
-    my_ref = await UsersFranchiseUser.filter(id_user=request.user).order_by("-id").first().values()
+    my_ref = (
+        await UsersFranchiseUser.filter(id_user=request.user)
+        .order_by("-id")
+        .first()
+        .values()
+    )
     data = await WaitDataVerifyDriver.filter().all().values()
     data = [x["id_driver"] for x in data]
-    data = await UsersFranchiseUser.filter(id_franchise=my_ref["id_franchise"], id_user__in=data).all().values()
+    data = (
+        await UsersFranchiseUser.filter(
+            id_franchise=my_ref["id_franchise"], id_user__in=data
+        )
+        .all()
+        .values()
+    )
     result = []
     for driver in data:
         driver_info = await UsersUser.filter(id=driver["id_user"]).first().values()
@@ -188,19 +229,83 @@ async def get_new_drivers_data(request: Request):
         photo = await UsersUserPhoto.filter(id_user=driver_info["id"]).first().values()
         photo = not_user_photo if photo is None else photo["photo_path"]
         driver_info["photo_path"] = photo
+
+        sum_of_requests_list: list = (
+            await DataUserBalanceHistory.filter(id_user=driver_info["id"], id_task=-100)
+            .all()
+            .values("money")
+        )
+        sum_of_requests: float = sum([float(x["money"]) for x in sum_of_requests_list])
+
+        sum_of_payouts_list: list = (
+            await DataUserBalanceHistory.filter(id_user=driver_info["id"], id_task=-101)
+            .all()
+            .values("money")
+        )
+        sum_of_payouts: float = sum([float(x["money"]) for x in sum_of_payouts_list])
+
+        driver_info["request_for_payment"] = sum_of_requests - sum_of_payouts
         result.append(driver_info)
-    return JSONResponse({"status": True,
-                         "message": "Success!",
-                         "drivers": result})
+    return JSONResponse({"status": True, "message": "Success!", "drivers": result})
 
 
-@router.get("/drivers",
-            dependencies=[Depends(has_access_franchise)],
-            responses=generate_responses([get_new_drivers]))
+@router.get(
+    "/drivers",
+    dependencies=[Depends(has_access_franchise)],
+    responses=generate_responses([get_new_drivers]),
+)
 async def get_all_drivers(request: Request):
-    my_ref = await UsersFranchiseUser.filter(id_user=request.user).order_by("-id").first().values()
-    data = [x["id_user"] for x in (await UsersFranchiseUser.filter(id_franchise=my_ref["id_franchise"]).all().values())]
-    data = [x["id_user"] for x in (await UsersUserAccount.filter(id_user__in=data, id_type_account=2).all().values())]
+    """
+    Возвращает всех водителей франшизы пользователя (в т.ч. неподтверждённые аккаунты)
+
+    Args:
+        request (Request): Объект запроса
+
+    Example:
+        Пример успешного ответа:
+
+        {"status": True,
+        "message": "Success!",
+        "drivers": [
+            {
+                "id": 0,
+                "surname": "string",
+                "name": "string",
+                "phone": "string",
+                "photo_path": "string",
+                "request_for_payment": 0.0,
+                "status": "string",
+                "isActive": True,
+                "datetime_create": "string-iso"
+            }
+        ]}
+
+    Returns:
+        JSONResponse: Список водителей франшизы
+    """
+
+    my_ref = (
+        await UsersFranchiseUser.filter(id_user=request.user)
+        .order_by("-id")
+        .first()
+        .values()
+    )
+    data = [
+        x["id_user"]
+        for x in (
+            await UsersFranchiseUser.filter(id_franchise=my_ref["id_franchise"])
+            .all()
+            .values()
+        )
+    ]
+    data = [
+        x["id_user"]
+        for x in (
+            await UsersUserAccount.filter(id_user__in=data, id_type_account=2)
+            .all()
+            .values()
+        )
+    ]
     result = []
     for driver in data:
         driver_info = await UsersUser.filter(id=driver).first().values()
@@ -214,6 +319,22 @@ async def get_all_drivers(request: Request):
         photo = await UsersUserPhoto.filter(id_user=driver_info["id"]).first().values()
         photo = not_user_photo if photo is None else photo["photo_path"]
         driver_info["photo_path"] = photo
+
+        sum_of_requests_list: list = (
+            await DataUserBalanceHistory.filter(id_user=driver_info["id"], id_task=-100)
+            .all()
+            .values("money")
+        )
+        sum_of_requests: float = sum([float(x["money"]) for x in sum_of_requests_list])
+
+        sum_of_payouts_list: list = (
+            await DataUserBalanceHistory.filter(id_user=driver_info["id"], id_task=-101)
+            .all()
+            .values("money")
+        )
+        sum_of_payouts: float = sum([float(x["money"]) for x in sum_of_payouts_list])
+
+        driver_info["request_for_payment"] = sum_of_requests - sum_of_payouts
         result.append(driver_info)
     for i in range(len(result) - 1):
         for j in range(len(result) - i - 1):
@@ -221,9 +342,7 @@ async def get_all_drivers(request: Request):
                 result[j], result[j + 1] = result[j + 1], result[j]
     for each in result:
         each["datetime_create"] = each["datetime_create"].isoformat()
-    return JSONResponse({"status": True,
-                         "message": "Success!",
-                         "drivers": result})
+    return JSONResponse({"status": True, "message": "Success!", "drivers": result})
 
 
 @router.get(
