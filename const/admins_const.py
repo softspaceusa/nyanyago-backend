@@ -160,3 +160,23 @@ class SuccessPostUserReport(BaseModel):
     status: bool = True
     message: str = "Success!"
     user_report_file: str
+
+
+class City(BaseModel):
+    id: int
+    title: str
+
+
+class FranchiseAdmin(BaseModel):
+    id: int
+    cities: List[City] | None
+
+
+class FranchiseAdmins(RootModel):
+    root: List[FranchiseAdmin] = []
+
+
+class SuccessGetFranchiseAdmins(BaseModel):
+    status: bool = True
+    message: str = "Success!"
+    franchise_admins: FranchiseAdmins

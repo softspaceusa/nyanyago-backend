@@ -18,3 +18,10 @@ formatter = logging.Formatter(
 )
 handler.setFormatter(formatter)
 logger.addHandler(handler)
+
+
+#set a tortoise logger to view sql query
+
+#logger_db_client = logging.getLogger("tortoise.db_client")
+#logger_db_client.setLevel(log_level[settings.log_level])
+#logger_db_client.addHandler(handler)
