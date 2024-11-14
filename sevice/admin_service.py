@@ -164,7 +164,7 @@ class ReportMaker:
             dates = []
 
             drawing.add(String(60, 120,
-                            f"{self.report_title} graphic for {table[0][0].strftime("%Y-%B")}",
+                            f"{self.report_title} graphic for {table[0][0].strftime('%Y-%B')}",
                             fontName='Times-Roman',
                             fontSize=36))
 
