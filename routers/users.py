@@ -14,8 +14,8 @@ from const.users_const import (AddMoney, ConfirmPayment, DeleteDebitCard,
                                UpdateUserData, UserDataPayment,
                                debit_card_not_found, get_money, get_my_card,
                                order_not_found, start_sbp_answer,
-                               success_answer, task_to_text)
-from defs import get_websocket_token
+                               success_answer, task_to_text, get_user)
+from defs import get_websocket_token, get_date_from_datetime
 from fastapi import APIRouter, HTTPException, Query, Request
 from models.authentication_db import (UsersAuthorizationData,
                                       UsersMobileAuthentication,
@@ -189,6 +189,86 @@ async def update_me_data(request: Request, item: UpdateUserData):
 
         return success_answer
     return access_forbidden
+
+
+@router.get("/get_user", responses=generate_responses([get_user, access_forbidden]))
+async def get_user(request: Request, user_id: int):
+    """
+    Возвращает данные пользователя.
+
+    Args:
+        request (Request): Запрос.
+        user_id (int): ID пользователя.
+
+    Returns:
+        JSONResponse: Данные пользователя.
+    """
+
+    if (
+        await UsersUserAccount.filter(
+            id_user=request.user, id_type_account__in=[6, 7]
+        ).count()
+        == 0
+    ):
+        return access_forbidden
+    user: dict = await UsersUser.filter(id=user_id).first().values()
+    user_photo: dict = await UsersUserPhoto.filter(id_user=user_id).first().values()
+    user_photo: str = (
+        not_user_photo
+        if user_photo is None or "photo_path" not in user_photo
+        else user_photo["photo_path"]
+    )
+    user["photo_path"] = user_photo
+    user["datetime_create"] = await get_date_from_datetime(user["datetime_create"])
+    user_id_type_account_dict: dict = (
+        await UsersUserAccount.filter(id_user=user_id).first().values("id_type_account")
+    )
+    user_id_type_account: int = int(user_id_type_account_dict["id_type_account"])
+    user_type_account_dict: dict = (
+        await DataTypeAccount.filter(id=user_id_type_account).first().values("title")
+    )
+    user_type_account: str = user_type_account_dict["title"]
+    user["type_account"] = user_type_account
+
+    if user_id_type_account == 2:
+        user_driver_dict: dict = (
+            await UsersDriverData.filter(id_driver=user_id)
+            .first()
+            .values("video_url", "id_car", "inn")
+        )
+
+        if not user_driver_dict:
+            return JSONResponse({"status": True, "message": "Success!", "user": user})
+
+        user_driver_video_url: str = (
+            user_driver_dict["video_url"] if user_driver_dict["video_url"] else "None"
+        )
+        user["driver_video"] = user_driver_video_url
+        user_driver_inn: str = user_driver_dict["inn"]
+        user["driver_inn"] = user_driver_inn
+        user_car_id: str = user_driver_dict["id_car"]
+        user_car: dict = {}
+
+        if user_car_id:
+            car: dict = await UsersCar.filter(id=user_car_id).first().values()
+            car_mark: dict = (
+                await DataCarMark.filter(id=car["id_car_mark"]).first().values()
+            )
+            car_model: dict = (
+                await DataCarModel.filter(id=car["id_car_model"]).first().values()
+            )
+            car_color: dict = (
+                await DataColor.filter(id=car["id_color"]).first().values()
+            )
+            user_car["mark"] = car_mark["title"]
+            user_car["model"] = car_model["title"]
+            user_car["color"] = car_color["title"]
+            user_car["year"] = car["year_create"]
+            user_car["state_number"] = car["state_number"]
+            user_car["ctc"] = car["ctc"]
+            user["car"] = user_car
+
+    return JSONResponse({"status": True, "message": "Success!", "user": user})
 
 
 @router.post("/money",

@@ -62,6 +62,34 @@ start_sbp_answer = JSONResponse({"status": True,
                                  }
                                 })
 
+get_user = JSONResponse(
+    {
+        "status": True,
+        "message": "Success!",
+        "user": {
+            "id": 0,
+            "photo_path": "string",
+            "name": "string",
+            "surname": "string",
+            "phone": "string",
+            "isActive": True,
+            "datetime_create": "string",
+            "type_account": "string",
+            "driver_video": "string",
+            "driver_inn": "string",
+            "car": {
+                "mark": "string",
+                "model": "string",
+                "color": "string",
+                "year": 0,
+                "state_number": "string",
+                "ctc": "string",
+            },
+        },
+    }
+)
+
+
 
 task_to_text = {
     -1: "Пополнение баланса",
