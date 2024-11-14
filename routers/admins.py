@@ -109,6 +109,35 @@ async def new_user(item: NewUser):
     return success_answer
 
 
+@router.get("/get_franchise_admins")
+async def get_franchise_admins() -> SuccessGetFranchiseAdmins:
+    """
+    Возвращает информацию об администраторах франшизы
+    """
+    response_data = {}
+
+    users = await UsersUser.filter(user_accounts__id_type_account="6").all().values("id", "phone", "franchise_users__id_franchise__franchise_cities__id_city__id", "franchise_users__id_franchise__franchise_cities__id_city__title")
+    logger.debug(users)
+    for user in users:
+        if user["id"] not in users: #user_id key help to add double row with cities
+            response_data[user["id"]] = {
+                "id": user["id"],
+                "phone": user["phone"],
+                "cities": [{
+                    "id": user["franchise_users__id_franchise__franchise_cities__id_city__id"],
+                    "title": user["franchise_users__id_franchise__franchise_cities__id_city__title"]
+                }] if user["franchise_users__id_franchise__franchise_cities__id_city__id"] else None
+            }
+        else:
+            response_data[user["id"]]["cities"].append({
+                "id": user["franchise_users__id_franchise__franchise_cities__id_city__id"],
+                "title": user["franchise_users__id_franchise__franchise_cities__id_city__title"]
+            })
+    logger.debug(response_data)
+    validate=FranchiseAdmins(response_data.values())
+    return SuccessGetFranchiseAdmins(franchise_admins=validate)
+
+
 @router.post("/get_partners",
              responses=generate_responses([get_partners]))
 async def get_partners(item: Union[GetPartners, None] = None):

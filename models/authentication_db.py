@@ -139,7 +139,7 @@ class UsersUserAccount(Model):
     Ссылается на модель UsersUser, DataTypeAccount
     """
     id = fields.BigIntField(pk=True)
-    id_user = fields.BigIntField(null=False)
+    id_user = fields.ForeignKeyField(model_name="models.UsersUser", related_name="user_accounts", source_field='id_user', null=False)
     id_type_account = fields.BigIntField(null=False)
 
     class Meta:
