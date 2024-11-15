@@ -127,22 +127,22 @@ async def get_partner_payouts(request: Request):
     Returns:
         JSONResponse - выплаты кэшбэка партнеру или сообщение об ошибке доступа.
     """
-    # if (
-    #     await UsersUserAccount.filter(id_user=request.user, id_type_account=5).count()
-    #     == 0
-    # ):
-    #     return access_forbidden
+    if (
+        await UsersUserAccount.filter(id_user=request.user, id_type_account=5).count()
+        == 0
+    ):
+        return access_forbidden
 
     payouts: list = (
         await HistoryRequestPayment.filter(
-            id_user=2, isCashback=True, isSuccess=True
+            id_user=request.user, isCashback=True, isSuccess=True
         )
         .all()
         .values()
     )
 
     cashback_percent_dict: dict = (
-        await UsersReferalCode.filter(id_user=2).first().values("percent")
+        await UsersReferalCode.filter(id_user=request.user).first().values("percent")
     )
     cashback_percent: int = int(cashback_percent_dict["percent"]) if cashback_percent_dict else 0
 
