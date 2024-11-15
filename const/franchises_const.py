@@ -75,6 +75,21 @@ get_franchise_driver_orders = JSONResponse(
     }
 )
 
+get_partner_payouts = JSONResponse(
+    {
+        "status": True,
+        "message": "Success!",
+        "payouts": [
+            {
+                "id": 0,
+                "money": 0.0,
+                "datetime_create": "string-iso",
+                "cashback_percent": 0
+            }
+        ],
+    }
+)
+
 
 
 class OutputPayment(BaseModel):

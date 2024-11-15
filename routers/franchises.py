@@ -97,6 +97,69 @@ async def get_partner_by_id(request: Request):
                          }})
 
 
+@router.get(
+    "/partner_payouts",
+    responses=generate_responses([get_partner_payouts, access_forbidden]),
+)
+async def get_partner_payouts(request: Request):
+    """
+    Возвращает все выплаты кэшбэка партнеру
+
+    Args:
+        request: Объект запроса
+
+    Example:
+        Пример успешного ответа:
+
+        {
+            "status": True,
+            "message": "Success!",
+            "payouts": [
+                {
+                    "id": 0,
+                    "money": 0.0,
+                    "datetime_create": "string-iso",
+                    "cashback_percent": 0
+                }
+            ],
+        }
+
+    Returns:
+        JSONResponse - выплаты кэшбэка партнеру или сообщение об ошибке доступа.
+    """
+    if (
+        await UsersUserAccount.filter(id_user=request.user, id_type_account=5).count()
+        == 0
+    ):
+        return access_forbidden
+
+    payouts: list = (
+        await HistoryRequestPayment.filter(
+            id_user=request.user, isCashback=True, isSuccess=True
+        )
+        .all()
+        .values()
+    )
+
+    cashback_percent_dict: dict = (
+        await UsersReferalCode.filter(id_user=request.user).first().values("percent")
+    )
+    cashback_percent: int = int(cashback_percent_dict["percent"])
+
+    for payout in payouts:
+        payout["datetime_create"] = await get_date_from_datetime(
+            payout["datetime_create"]
+        )
+        payout.pop("id_user")
+        payout.pop("id_history")
+        payout.pop("isCashback")
+        payout.pop("isActive")
+        payout.pop("isSuccess")
+        payout.pop("id_card")
+        payout["money"] = abs(float(payout["money"]))
+        payout["cashback_percent"] = cashback_percent
+    return JSONResponse({"status": True, "message": "Success!", "payouts": payouts})
+
 @router.post("/new_user",
              dependencies=[Depends(has_access_franchise_admin)],
              responses=generate_responses([success_answer,
