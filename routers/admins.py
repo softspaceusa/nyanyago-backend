@@ -109,7 +109,7 @@ async def new_user(item: NewUser):
     return success_answer
 
 
-@router.get("/get_franchise_admins")
+@router.get("/franchise_admins")
 async def get_franchise_admins() -> SuccessGetFranchiseAdmins:
     """
     Возвращает информацию об администраторах франшизы
