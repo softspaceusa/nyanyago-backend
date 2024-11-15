@@ -2,7 +2,8 @@ import re
 
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, field_validator
-from typing import Union
+from typing import Union, List
+from enum import Enum
 
 
 chat_not_found_answer = JSONResponse({"status": False,
@@ -192,3 +193,24 @@ class LimitOffset(BaseModel):
     offset: Union[int, None] = 0
 
 
+class DetailedHistory(BaseModel):
+    description: str
+    title: str
+    date: str = Field(pattern='^\d{1,2}/\d{1,2}$')
+    amount: float
+
+
+class GetUserMoneySuccess(BaseModel):
+    status: bool = True
+    message: str = "Success!"
+    balance: float
+    income: List[float]
+    expenses: List[float]
+    history: List[DetailedHistory]
+
+
+class Period(str, Enum):
+    current_day = "current_day"
+    current_week = "current_week"
+    current_month = "current_month"
+    current_year = "current_year"
