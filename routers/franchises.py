@@ -582,11 +582,11 @@ async def get_franchise_driver_orders(driver_id: int):
                 "surname"] if order_driver_name_surname else "Unknown"
         )
 
-        order.pop("id_user")
-        order.pop("id_status")
-        order.pop("id_type_order")
-        order.pop("isActive")
-        order.pop("datetime_create")
+        order.pop("id_user", None)
+        order.pop("id_status", None)
+        order.pop("id_type_order", None)
+        order.pop("isActive", None)
+        order.pop("datetime_create", None)
 
     return JSONResponse({"status": True, "message": "Success!", "orders": orders})
 
