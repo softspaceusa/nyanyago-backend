@@ -15,3 +15,7 @@ def test_create_franchise(admin):
     name = "string"
     referal_code = None
     id_city = []
+
+#login and password
+pytest.login = "+79259405489"
+pytest.password = "5ad23bbcb26733b6a2dcad6a85f993ab"

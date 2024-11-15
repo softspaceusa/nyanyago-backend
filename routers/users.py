@@ -4,14 +4,17 @@ import hashlib
 import json
 import random
 import uuid
+from pydantic.json_schema import SkipJsonSchema
 
 import requests
+
+from common.logger import logger
 from const.drivers_const import *
 from const.static_data_const import (DictToModel, access_forbidden,
                                      not_user_photo)
 from const.users_const import (AddMoney, ConfirmPayment, DeleteDebitCard,
                                LimitOffset, SbpPayment, StartPayment,
-                               UpdateUserData, UserDataPayment,
+                               UpdateUserData, UserDataPayment, Period,
                                debit_card_not_found, get_money, get_my_card,
                                order_not_found, start_sbp_answer,
                                success_answer, task_to_text, get_user)
@@ -273,21 +276,20 @@ async def get_user(request: Request, user_id: int):
 
 @router.post("/money",
              responses=generate_responses([get_money]))
-async def get_my_money(request: Request, item: Union[LimitOffset, None] = None, period: str = "current_day"):
+async def get_my_money(request: Request, item: Union[LimitOffset, None] = None, period: Period | SkipJsonSchema[None] = None):
 
-    now = datetime.now()
-
-    if period == "current_day":
+    now = datetime.datetime.now()
+    if period == Period.current_day.value:
         start_date = now.replace(hour=0, minute=0, second=0, microsecond=0)
         end_date = now.replace(hour=23, minute=59, second=59, microsecond=999999)
-    elif period == "current_week":
+    elif period == Period.current_week.value:
         start_date = now - datetime.timedelta(days=now.weekday())
         start_date = start_date.replace(hour=0, minute=0, second=0, microsecond=0)
         end_date = now.replace(hour=23, minute=59, second=59, microsecond=999999)
-    elif period == "current_month":
+    elif period == Period.current_month.value:
         start_date = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
         end_date = now.replace(hour=23, minute=59, second=59, microsecond=999999)
-    elif period == "current_year":
+    elif period == Period.current_year.value:
         start_date = now.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
         end_date = now.replace(hour=23, minute=59, second=59, microsecond=999999)
     else:

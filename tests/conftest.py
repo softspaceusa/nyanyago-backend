@@ -47,4 +47,4 @@ def conn() -> Generator:
             conn = client
         )
 
-admin = franchise = conn
+admin = franchise = parrent = conn
