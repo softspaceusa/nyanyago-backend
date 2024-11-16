@@ -4,7 +4,7 @@ from models.static_data_db import DataCountry, DataColor, DataCity, DataCarMark,
 from models.authentication_db import UsersBearerToken
 from models.admins_db import AdminMobileSettings
 from fastapi import APIRouter, Depends, Request
-from const.dependency import has_access
+from const.dependency import has_access, has_access_franchise
 from const.static_data_const import *
 import json
 
@@ -122,20 +122,64 @@ async def get_other_drive_params():
                          "data": data})
 
 
-@router.get("/tariffs",
-            dependencies=[Depends(has_access)],
-            responses=generate_responses([get_tariffs]))
+@router.get(
+    "/tariffs",
+    dependencies=[Depends(has_access_franchise)],
+    responses=generate_responses([get_tariffs, franchise_not_found]),
+)
 async def get_tariffs(request: Request):
+    """
+    Возвращает тарифы франшизы текущего пользователя.
+
+    Args:
+        request: Объект запроса.
+
+    Example:
+        Пример успешного ответа:
+
+        {
+            "status": True,
+            "message": "Success!",
+            "tariffs": [
+                {
+                    "id": 0,
+                    "name": "string",
+                    "amount": 0.0,
+                    "photo_path": "string",
+                    "type": "string",
+                    "one_time": True,
+                }
+            ],
+        }
+
+    Returns:
+        JSONResponse - тарифы франшизы текущего пользователя или сообщение об ошибке.
+    """
     my_ref = await UsersFranchiseUser.filter(id_user=request.user).first().values()
-    data = await DataCarTariff.filter(id_franchise=my_ref["id_franchise"],
-                                      isActive=True).order_by("id").all().values("id", "title", "description",
-                                                                                 "amount", "photo_path")
+    if not my_ref:
+        return franchise_not_found
+
+    data: list = (
+        await DataCarTariff.filter(id_franchise=my_ref["id_franchise"], isActive=True)
+        .order_by("id")
+        .all()
+        .values()
+    )
+    result = []
     for each in data:
-        each["amount"] = float(each["amount"])
-        each["isAvailable"] = True
-    return JSONResponse({"status": True,
-                         "message": "Success!",
-                         "tariffs": data})
+        current_tariff: dict = dict()
+        current_tariff["amount"] = float(each["amount"])
+        current_tariff["id"] = each["id"]
+        current_tariff["type"] = each["title"]
+        current_tariff["photo_path"] = (
+            each["photo_path"] if each["photo_path"] else None
+        )
+        current_tariff["name"] = (
+            each["description"] if each["description"] else "Название не указано"
+        )
+        current_tariff["one_time"] = each["one_time"] if each["one_time"] else True
+        result.append(current_tariff)
+    return JSONResponse({"status": True, "message": "Success!", "tariffs": result})
 
 
 @router.get("/drive_statuses",

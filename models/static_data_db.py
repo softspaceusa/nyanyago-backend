@@ -123,9 +123,10 @@ class DataCarTariff(Model):
     Ссылается на модель UsersFranchise.
     """
     id = fields.BigIntField(pk=True)
-    title = fields.TextField()
-    description = fields.TextField(null=True)
+    title = fields.TextField()  # Тип (Эконом, Бизнес и тд)
+    description = fields.TextField(null=True)  # Название
     amount = fields.BigIntField(null=True)
+    one_time = fields.BooleanField(default=True)  # Разовый (или по графику)
     percent = fields.BigIntField(null=True)
     photo_path = fields.TextField(null=True)
     id_franchise = fields.BigIntField(null=False)

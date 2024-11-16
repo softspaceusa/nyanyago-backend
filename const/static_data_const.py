@@ -18,19 +18,29 @@ country = JSONResponse({"status": True,
                                         }
                                     ]
                         })
-get_tariffs = JSONResponse({"status": True,
-                            "message": "Success!",
-                            "tariffs": [
-                                            {
-                                                "id": 0,
-                                                "title": "string",
-                                                "amount": 0.0,
-                                                "photo_path": "string",
-                                                "description": "string",
-                                                "isAvailable": True
-                                            }
-                                        ]
-                            })
+
+get_tariffs = JSONResponse(
+    {
+        "status": True,
+        "message": "Success!",
+        "tariffs": [
+            {
+                "id": 0,
+                "name": "string",
+                "amount": 0.0,
+                "photo_path": "string",
+                "type": "string",
+                "one_time": True,
+            }
+        ],
+    }
+)
+
+franchise_not_found = JSONResponse(
+    {"status": False, "message": "Franchise for current user not found!"},
+    status_code=404,
+)
+
 color = JSONResponse({"status": True,
                       "message": "Success!",
                       "colors": [
