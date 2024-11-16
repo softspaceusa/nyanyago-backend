@@ -405,6 +405,18 @@ class NewSchedule(BaseModel):
     roads: List[Road]
 
 
+class ReadSchedule(BaseModel):
+    id: int
+    title: str  # Количество дней
+    description: str  # Количество дней
+    duration: int  # Количество дней
+    children_count: int
+    week_days: list  # Номера дней от 0 до 6 (Пн, Вт, Ср, Чт, Пт, Сб, Вс) == (0, 1, 2, 3, 4, 5, 6)
+    id_tariff: int  # get_tariffs by user's franchise
+    other_parametrs: List[OtherParams]
+    roads: List[Road]
+
+
 class WantSchedule(BaseModel):
     id_schedule: int
     id_road: List[int]
