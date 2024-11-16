@@ -3,13 +3,13 @@ from typing import List, Dict
 import pytest
 from pydantic import BaseModel, RootModel, TypeAdapter
 
-
+from config import settings
 from const.orders_const import NewSchedule, ReadSchedule, Road, DriveAddresses, Address, NowLocation
 from tests.conftest import franchise
 
 #franchise login and password
-pytest.login = "+79262713209"
-pytest.password = "25d55ad283aa400af464c76d713c07ad"
+pytest.login = settings.test_franchise_admin_login
+pytest.password = settings.test_franchise_admin_password
 
 """
 def test_create_tariff(franchise):
@@ -27,8 +27,9 @@ def test_create_tariff(franchise):
     assert new_tariff_req == new_tariff
 """
 
+@pytest.mark.asyncio
 @pytest.mark.dependency()
-def test_create_schedule(franchise):
+async def test_create_schedule(franchise):
 
     new_schedule = NewSchedule(
         title="test_schedule",
@@ -65,18 +66,18 @@ def test_create_schedule(franchise):
         ]
     )
     new_schedule_json = new_schedule.model_dump(mode='json')
-    schedules_resp = franchise.conn.post( "/api/v1.0/orders/schedule", json=new_schedule_json)
+    schedules_resp = await franchise.conn.post( "/orders/schedule", json=new_schedule_json)
     assert schedules_resp.status_code == 200
 
 
-
+@pytest.mark.asyncio
 @pytest.mark.dependency()
-def test_get_schedule(franchise):
+async def test_get_schedule(franchise):
     def get_schedule(schedules: List[ReadSchedule], title: str) -> ReadSchedule:
         for schedule in schedules:
             if schedule.title == title:
                 return schedule
-    schedules_resp = franchise.conn.get("/api/v1.0/orders/schedules")
+    schedules_resp = await franchise.conn.get("/orders/schedules")
     assert schedules_resp.status_code == 200
     schedules = schedules_resp.json()["schedules"]
     schedules_list = [ReadSchedule(**schedule) for schedule in schedules]
@@ -84,8 +85,8 @@ def test_get_schedule(franchise):
     test_schedule = get_schedule(schedules_list, title="test_schedule")
     pytest.test_schedule_id = test_schedule.id
 
-
+@pytest.mark.asyncio
 @pytest.mark.dependency(depends=["test_create_schedule", "test_get_schedule"])
-def test_delete_schedule(franchise):
-    schedules_resp = franchise.conn.delete(f"/api/v1.0/orders/schedule/{pytest.test_schedule_id}")
+async def test_delete_schedule(franchise):
+    schedules_resp = await franchise.conn.delete(f"/orders/schedule/{pytest.test_schedule_id}")
     assert schedules_resp.status_code == 200

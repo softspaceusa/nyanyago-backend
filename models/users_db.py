@@ -1,5 +1,8 @@
+import re
+
 from tortoise import fields
 from tortoise.models import Model
+from common.logger import logger
 
 
 class UsersUser(Model):
@@ -204,8 +207,8 @@ class UsersFranchiseUser(Model):
     Ссылается на модель UsersUser, UsersFranchise
     """
     id = fields.BigIntField(pk=True)
-    id_user = fields.ForeignKeyField(model_name="models.UsersUser", related_name="franchise_users", source_field='id_user', null=False)
-    id_franchise = fields.ForeignKeyField(model_name="models.UsersFranchise", related_name="franchise_users", source_field='id_franchise', null=False)
+    id_user = fields.BigIntField(null=False)
+    id_franchise = fields.BigIntField(null=False)
 
 
     class Meta:
@@ -288,8 +291,8 @@ class UsersFranchiseCity(Model):
     Ссылается на модель DataCity, UsersFranchise.
     """
     id = fields.BigIntField(pk=True)
-    id_franchise = fields.ForeignKeyField(model_name="models.UsersFranchise", related_name="franchise_cities", source_field='id_franchise', null=False)
-    id_city = fields.ForeignKeyField(model_name="models.DataCity", related_name="franchise_cities", source_field='id_city', null=False)
+    id_franchise = fields.BigIntField(null=False)
+    id_city = fields.BigIntField(null=False)
 
 
     class Meta:

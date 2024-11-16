@@ -1,6 +1,6 @@
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
-from typing import Union
+from typing import Union, Any
 
 
 not_user_photo = "https://nyanyago.ru/api/v1.0/files/not_user_photo.png"
