@@ -1,7 +1,8 @@
 from fastapi.responses import JSONResponse
 from fastapi.encoders import jsonable_encoder
-from pydantic import BaseModel, RootModel, ConfigDict
+from pydantic import BaseModel, RootModel, ConfigDict, Field
 from typing import Union, List, Dict
+from enum import Enum
 from datetime import date
 
 success_answer = JSONResponse({"status": True,
@@ -95,13 +96,40 @@ get_new_drivers = JSONResponse({"status": True,
                                     }
                                 ]})
 
+class Role(int, Enum):
+    PARENT = 1
+    DRIVER = 2
+    OPERATOR = 3
+    MANAGER = 4
+    PARTNER = 5
+    FRANCHISE_ADMIN = 6
+    ADMIN = 7
+
+
+
 
 class NewUser(BaseModel):
-    phone: str
-    password: str
-    role: int
-    surname: Union[str, None] = None
-    name: Union[str, None] = None
+    phone: str = Field(
+        pattern=r"^\+7 \(\d{3}\) \d{3} \d{2} \d{2}$",
+        description="Phone format: '+7 (999) 999 99 99'",
+    )
+    password: str = Field(
+        min_length=8,
+        description="Password with min 8 characters, containing at least one uppercase letter, one digit, and one special character",
+    )
+    role: Role
+    surname: str = Field(
+        min_length=2,
+        max_length=50,
+        pattern="^[a-zA-Z]+$",
+        description="Surname should contain only Latin letters.",
+    )
+    name: str = Field(
+        min_length=2,
+        max_length=50,
+        pattern="^[a-zA-Z]+$",
+        description="Name should contain only Latin letters.",
+    )
     referal_code: Union[str, None] = None
     id_city: Union[List[int], None] = []
 
@@ -169,11 +197,15 @@ class City(BaseModel):
 
 class FranchiseAdmin(BaseModel):
     id: int
+    phone: str = Field(
+        pattern=r"^\+7 \(\d{3}\) \d{3} \d{2} \d{2}$",
+        description="Phone format: '+7 (999) 999 99 99'",
+    )
     cities: List[City] | None
 
 
 class FranchiseAdmins(RootModel):
-    root: List[FranchiseAdmin] = []
+    root: List[FranchiseAdmin]
 
 
 class SuccessGetFranchiseAdmins(BaseModel):

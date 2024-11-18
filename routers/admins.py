@@ -2,16 +2,15 @@ import os
 
 from const.static_data_const import not_user_photo, not_found_other_parametr,OtherDriveParametr,UpdateOtherDriveParametr
 from models.authentication_db import UsersUserAccount, UsersReferalCode, UsersAuthorizationData, UsersBearerToken
-from models.users_db import UsersUser, UsersVerifyAccount, UsersUserPhoto, UsersReferalUser, UsersFranchise, \
-    UsersFranchiseCity
-from models.users_db import UsersFranchiseUser, HistoryPaymentTink, UsersUser
+from models.users_db import UsersVerifyAccount, UsersUserPhoto, UsersReferalUser
+from models.users_db import HistoryPaymentTink, UsersUser
 from const.login_const import uncorrect_phone, user_already_creates
 from defs import check_correct_phone, error, get_date_from_datetime
 from models.chats_db import ChatsChatParticipant, ChatsChat
-from models.static_data_db import DataOtherDriveParametr, DataCity, DataCarTariff
+from models.static_data_db import DataOtherDriveParametr
 from models.admins_db import AdminMobileSettings
 from models.drivers_db import UsersDriverData
-from sevice.admin_service import ReportMaker
+from sevice.admin_service import ReportMaker, create_franchise_user
 from common.logger import logger
 
 from fastapi.responses import FileResponse
@@ -19,6 +18,7 @@ from fastapi import APIRouter, Request
 from starlette.background import BackgroundTask
 from const.admins_const import *
 from tortoise.models import Q
+from tortoise import Tortoise
 from smsaero import SmsAero
 import traceback
 import hashlib
@@ -51,6 +51,7 @@ def generate_responses(answers: list):
                                            new_user_message_dont_delivery]))
 async def new_user(item: NewUser):
     item.phone = await check_correct_phone(item.phone)
+
     if item.phone is None: return uncorrect_phone
     if await UsersUser.filter(phone=item.phone).count()>0:
         return user_already_creates
@@ -73,31 +74,10 @@ async def new_user(item: NewUser):
             await error(traceback.format_exc())
             return new_user_message_dont_delivery
     else:
-        franchise = await UsersFranchise.create(description=f"Франшиза {item.phone}")
-        for each in item.id_city:
-            if await DataCity.filter(id=each).count() == 0:
-                continue
-            await UsersFranchiseCity.create(id_franchise=franchise.id, id_city=each)
-        await DataCarTariff.create(title="Эконом", amount=78, id_franchise=franchise.id,
-                                   photo_path="https://nyanyago.ru/api/v1.0/files/econom.png")
-        await DataCarTariff.create(title="Комфорт", amount=108, id_franchise=franchise.id,
-                                   photo_path="https://nyanyago.ru/api/v1.0/files/comfort.png")
-        await DataCarTariff.create(title="Комфорт+", amount=115, id_franchise=franchise.id,
-                                   photo_path="https://nyanyago.ru/api/v1.0/files/comfort_plus.png")
-        await DataCarTariff.create(title="Бизнес", amount=138, id_franchise=franchise.id,
-                                   photo_path="https://nyanyago.ru/api/v1.0/files/econom.png")
-        await DataCarTariff.create(title="Минивэн", amount=198, id_franchise=franchise.id,
-                                   photo_path="https://nyanyago.ru/api/v1.0/files/comfort_plus.png")
-        await DataCarTariff.create(title="Премиум", amount=243, id_franchise=franchise.id,
-                                   photo_path="https://nyanyago.ru/api/v1.0/files/econom.png")
-        user = await UsersUser.create(phone=item.phone, name=item.name, surname=item.surname)
-        await UsersFranchiseUser.create(id_user=user.id, id_franchise=franchise.id)
-        await UsersAuthorizationData.create(id_user=user.id, login=item.phone,
-                                                password=str((hashlib.md5(item.password.encode())).hexdigest()))
-        await UsersVerifyAccount.create(id_user=user.id)
-        if item.role != 6:
-            await UsersUserAccount.create(id_user=user.id, id_type_account=6)
-        await UsersUserAccount.create(id_user=user.id, id_type_account=item.role)
+        try:
+            await create_franchise_user(item)
+        except Exception:
+            logger.error("Can't create user in DB")
         try:
             api = SmsAero("auto.nyany@yandex.ru", "344334Auto")
             api.send(item.phone, f"Ваши данные для входа в аккаунт АвтоНяни:\n\n"
@@ -116,7 +96,15 @@ async def get_franchise_admins() -> SuccessGetFranchiseAdmins:
     """
     response_data = {}
 
-    users = await UsersUser.filter(user_accounts__id_type_account="6").all().values("id", "phone", "franchise_users__id_franchise__franchise_cities__id_city__id", "franchise_users__id_franchise__franchise_cities__id_city__title")
+    SQL_REQUEST = ('SELECT u.id, u.phone, fc.id_city, c.title FROM "users".user AS u '
+                   'JOIN "users".user_account AS ua ON u.id=ua.id_user '
+                   'JOIN "users".franchise_user as fu ON u.id=fu.id_user '
+                   'LEFT JOIN "users".franchise_city fc ON fu.id_franchise=fc.id_franchise '
+                   'LEFT JOIN "data".city as c ON fc.id_city=c.id '
+                   'WHERE ua.id_type_account=6;')
+    #users = await UsersUser.filter(user_accounts__id_type_account="6").all().values("id", "phone", "franchise_users__id_franchise__franchise_cities__id_city__id", "franchise_users__id_franchise__franchise_cities__id_city__title")
+    conn = Tortoise.get_connection("default")
+    users = await conn.execute_query_dict(SQL_REQUEST)
     logger.debug(users)
     for user in users:
         if user["id"] not in users: #user_id key help to add double row with cities
@@ -124,14 +112,14 @@ async def get_franchise_admins() -> SuccessGetFranchiseAdmins:
                 "id": user["id"],
                 "phone": user["phone"],
                 "cities": [{
-                    "id": user["franchise_users__id_franchise__franchise_cities__id_city__id"],
-                    "title": user["franchise_users__id_franchise__franchise_cities__id_city__title"]
-                }] if user["franchise_users__id_franchise__franchise_cities__id_city__id"] else None
+                    "id": user["id_city"],
+                    "title": user["title"]
+                }] if user["id_city"] else None
             }
         else:
             response_data[user["id"]]["cities"].append({
-                "id": user["franchise_users__id_franchise__franchise_cities__id_city__id"],
-                "title": user["franchise_users__id_franchise__franchise_cities__id_city__title"]
+                "id": user["id_city"],
+                "title": user["title"]
             })
     logger.debug(response_data)
     validate=FranchiseAdmins(response_data.values())

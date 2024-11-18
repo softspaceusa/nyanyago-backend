@@ -1,6 +1,7 @@
 from typing import Dict, List
 import datetime
 import traceback
+import hashlib
 from enum import Enum
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4, landscape
@@ -10,10 +11,16 @@ from reportlab.graphics.shapes import Drawing, String
 from reportlab.graphics.charts.linecharts import HorizontalLineChart
 
 from tortoise.models import Model
+from tortoise.transactions import atomic
 
 from config import settings
 from common.logger import logger
 
+from models.authentication_db import UsersUserAccount, UsersAuthorizationData
+from models.static_data_db import DataCity, DataCarTariff
+
+from models.users_db import UsersVerifyAccount, UsersFranchise, \
+    UsersFranchiseCity, UsersFranchiseUser, UsersUser
 
 class ReportType(Enum):
     COUNT = "count"
@@ -238,3 +245,33 @@ class ReportMaker:
             # write the document to disk
             logger.debug("Will write pdf file")
             doc.build(elements)
+
+
+@atomic(connection_name="default")
+async def create_franchise_user(item):
+    franchise = await UsersFranchise.create(description=f"Франшиза {item.phone}")
+    for each in item.id_city:
+        if await DataCity.filter(id=each).count() == 0:
+            continue
+        await UsersFranchiseCity.create(id_franchise=franchise.id, id_city=each)
+    await DataCarTariff.create(title="Эконом", amount=78, id_franchise=franchise.id,
+                               photo_path="https://nyanyago.ru/api/v1.0/files/econom.png")
+    await DataCarTariff.create(title="Комфорт", amount=108, id_franchise=franchise.id,
+                               photo_path="https://nyanyago.ru/api/v1.0/files/comfort.png")
+    await DataCarTariff.create(title="Комфорт+", amount=115, id_franchise=franchise.id,
+                               photo_path="https://nyanyago.ru/api/v1.0/files/comfort_plus.png")
+    await DataCarTariff.create(title="Бизнес", amount=138, id_franchise=franchise.id,
+                               photo_path="https://nyanyago.ru/api/v1.0/files/econom.png")
+    await DataCarTariff.create(title="Минивэн", amount=198, id_franchise=franchise.id,
+                               photo_path="https://nyanyago.ru/api/v1.0/files/comfort_plus.png")
+    await DataCarTariff.create(title="Премиум", amount=243, id_franchise=franchise.id,
+                               photo_path="https://nyanyago.ru/api/v1.0/files/econom.png")
+    user = await UsersUser.create(phone=item.phone, name=item.name, surname=item.surname)
+    await UsersFranchiseUser.create(id_user=user.id, id_franchise=franchise.id)
+    await UsersAuthorizationData.create(id_user=user.id, login=item.phone,
+                                        password=str((hashlib.md5(item.password.encode())).hexdigest()))
+    await UsersVerifyAccount.create(id_user=user.id)
+    if item.role != 6:
+        await UsersUserAccount.create(id_user=user.id, id_type_account=6)
+    await UsersUserAccount.create(id_user=user.id, id_type_account=item.role)
+
