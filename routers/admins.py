@@ -4,7 +4,7 @@ from const.static_data_const import not_user_photo, not_found_other_parametr,Oth
 from models.authentication_db import UsersUserAccount, UsersReferalCode, UsersAuthorizationData, UsersBearerToken
 from models.users_db import UsersVerifyAccount, UsersUserPhoto, UsersReferalUser
 from models.users_db import HistoryPaymentTink, UsersUser
-from const.login_const import uncorrect_phone, user_already_creates
+from const.login_const import uncorrect_phone, user_already_creates, error_create_user
 from defs import check_correct_phone, error, get_date_from_datetime
 from models.chats_db import ChatsChatParticipant, ChatsChat
 from models.static_data_db import DataOtherDriveParametr
@@ -48,7 +48,8 @@ def generate_responses(answers: list):
                                            uncorrect_phone,
                                            user_already_creates,
                                            unsupported_role,
-                                           new_user_message_dont_delivery]))
+                                           new_user_message_dont_delivery,
+                                           error_create_user]))
 async def new_user(item: NewUser):
     item.phone = await check_correct_phone(item.phone)
 
@@ -78,6 +79,8 @@ async def new_user(item: NewUser):
             await create_franchise_user(item)
         except Exception:
             logger.error("Can't create user in DB")
+            return error_create_user
+
         try:
             api = SmsAero("auto.nyany@yandex.ru", "344334Auto")
             api.send(item.phone, f"Ваши данные для входа в аккаунт АвтоНяни:\n\n"

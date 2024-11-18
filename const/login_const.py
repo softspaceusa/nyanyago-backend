@@ -19,6 +19,8 @@ uncorrect_phone = JSONResponse({"status": False,
                                      "message": "Phone number uncorrect!"}, 404)
 uncorrect_code = JSONResponse({"status": False,
                                      "message": "Code of verify uncorrect!"}, 404)
+error_create_user = JSONResponse({"status": False,
+                                     "message": "Can't create user!"}, 500)
 user_already_creates = JSONResponse({"status": False,
                                      "message": "User with this phone already created!"}, 404)
 mobile_authentication_unsuccessful = JSONResponse({"detail": "Mobile Authentication unsuccessful!"}, 404)
