@@ -102,6 +102,7 @@ class NewTariff(BaseModel):
     description: Union[str, None] = None
     percent: Union[int, None] = None
     photo_path: Union[str, None] = "https://nyanyago.ru/api/v1.0/files/econom.png"
+    one_time: bool = True
 
 
 class UpdateTariff(BaseModel):
@@ -109,6 +110,7 @@ class UpdateTariff(BaseModel):
     title: Union[str, None] = None
     description: Union[str, None] = None
     photo_path: Union[str, None] = None
+    one_time: Union[bool, None] = None
 
 
 class BonusFineDriver(BaseModel):

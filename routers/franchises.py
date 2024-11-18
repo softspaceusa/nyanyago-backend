@@ -632,7 +632,7 @@ async def new_tariff(request: Request, item: NewTariff):
     if data["title"].lower() in ("эконом", "комфорт", "комфорт+", "бизнес", "минивэн"):
         return access_forbidden
     await DataCarTariff.create(title=item.title, id_franchise=my_ref["id_franchise"], description=item.description,
-                               amount=data["amount"], photo_path=item.photo_path, percent=None)
+                               amount=data["amount"], photo_path=item.photo_path, percent=None, one_time=item.one_time)
     return success_answer
 
 
@@ -652,6 +652,8 @@ async def update_tariff(request: Request, item: UpdateTariff):
         await DataCarTariff.filter(id=item.id_tariff).update(description=item.description)
     if item.photo_path is not None and len(item.photo_path) != 0 and item.photo_path.lower() != "":
         await DataCarTariff.filter(id=item.id_tariff).update(photo_path=item.photo_path)
+    if item.one_time:
+        await DataCarTariff.filter(id=item.id_tariff).update(one_time=item.one_time)
     return success_answer
 
 
