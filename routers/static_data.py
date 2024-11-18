@@ -114,7 +114,7 @@ async def get_now_settings_of_biometric_authentication():
             dependencies=[Depends(has_access)],
             responses=generate_responses([drive_params]))
 async def get_other_drive_params():
-    data = await DataOtherDriveParametr.filter().order_by("id").all().values("id", "title", "amount", "isActive")
+    data = await DataOtherDriveParametr.filter(isActive=True).order_by("id").all().values("id", "title", "amount", "isActive")
     for each in data:
         each["amount"] = float(each["amount"])
     return JSONResponse({"status": True,

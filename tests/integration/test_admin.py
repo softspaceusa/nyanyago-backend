@@ -27,7 +27,6 @@ def test_create_franchise(admin):
 @pytest.mark.dependency()
 async def test_create_other_parametrs_of_drive(admin):
     new_service = {"title": "test_service", "amount": 1337}
-    new_service_json = json.dumps(new_service)
     response = await admin.conn.post("/admins/other-parametrs-of-drive", json=new_service)
     assert response.status_code == 200
 
