@@ -29,8 +29,43 @@ async def test_create_franchise(admin):
 
 
 @pytest.mark.asyncio
-async def test_create_franchise_nonvalid(admin):
+async def test_create_partner(admin):
     """Return a new registered user."""
+    new_user = {
+        "phone": "+7 (956) 796 96 92",
+        "password": "12311231",
+        "role": 5,
+        "surname": "string",
+        "name": "string",
+        "referal_code": "1ABCD2ABCD3ABCD4ABCD5ABCD6ABCD12",
+        "id_city": []
+    }
+    response = await admin.conn.post("/admins/new_user", json=new_user)
+    logger.debug(response.json())
+    assert response.status_code == 201
+
+
+@pytest.mark.asyncio
+async def test_create_partner(admin):
+    """Wrong referal code."""
+    new_user = {
+        "phone": "+7 (956) 796 96 93",
+        "password": "12311231",
+        "role": 5,
+        "surname": "string",
+        "name": "string",
+        "referal_code": "1ABCD2ABCD3ABCD4ABCD5ABCD6ABCD1",
+        "id_city": []
+    }
+    response = await admin.conn.post("/admins/new_user", json=new_user)
+    logger.debug(response.json())
+    assert response.status_code == 422
+
+
+
+@pytest.mark.asyncio
+async def test_create_franchise_nonvalid(admin):
+    """Non valid password"""
     new_user = {
         "phone": "+7 (956) 796 96 96",
         "password": "123",

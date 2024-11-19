@@ -10,7 +10,8 @@ from models.chats_db import ChatsChatParticipant, ChatsChat
 from models.static_data_db import DataOtherDriveParametr
 from models.admins_db import AdminMobileSettings
 from models.drivers_db import UsersDriverData
-from sevice.admin_service import ReportMaker, create_franchise_user
+from sevice.admin_service import ReportMaker, create_franchise_user, create_partner_user
+
 from common.logger import logger
 
 from fastapi.responses import FileResponse
@@ -59,13 +60,11 @@ async def new_user(item: NewUser):
     if item.role not in [3, 4, 5, 6]:
         return unsupported_role
     if item.role == 5:
-        user = await UsersUser.create(phone=item.phone, name=item.name, surname=item.surname)
-        await UsersAuthorizationData.create(id_user=user.id, login=item.phone,
-                                                password=str((hashlib.md5(item.password.encode())).hexdigest()))
-        await UsersVerifyAccount.create(id_user=user.id)
-        await UsersUserAccount.create(id_user=user.id, id_type_account=item.role)
-        if item.referal_code is not None and len(item.referal_code) > 0:
-            await UsersReferalCode.create(id_user=user.id, code=item.referal_code, percent=30)
+        try:
+            create_partner_user(item)
+        except:
+            logger.error("Can't create user in DB")
+            return error_create_user
         try:
             api = SmsAero("auto.nyany@yandex.ru", "344334Auto")
             api.send(item.phone, f"Ваши данные для входа в аккаунт АвтоНяни:\n\n"

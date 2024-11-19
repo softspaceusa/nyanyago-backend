@@ -21,6 +21,7 @@ from models.static_data_db import DataCity, DataCarTariff
 
 from models.users_db import UsersVerifyAccount, UsersFranchise, \
     UsersFranchiseCity, UsersFranchiseUser, UsersUser
+from models.authentication_db import UsersReferalCode
 
 class ReportType(Enum):
     COUNT = "count"
@@ -275,3 +276,12 @@ async def create_franchise_user(item):
         await UsersUserAccount.create(id_user=user.id, id_type_account=6)
     await UsersUserAccount.create(id_user=user.id, id_type_account=item.role)
 
+@atomic(connection_name="default")
+async def create_partner_user(item):
+    user = await UsersUser.create(phone=item.phone, name=item.name, surname=item.surname)
+    await UsersAuthorizationData.create(id_user=user.id, login=item.phone,
+                                        password=str((hashlib.md5(item.password.encode())).hexdigest()))
+    await UsersVerifyAccount.create(id_user=user.id)
+    await UsersUserAccount.create(id_user=user.id, id_type_account=item.role)
+    if item.referal_code is not None and len(item.referal_code) > 0:
+        await UsersReferalCode.create(id_user=user.id, code=item.referal_code, percent=30)
