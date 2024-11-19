@@ -130,7 +130,12 @@ class NewUser(BaseModel):
         pattern="^[a-zA-Z]+$",
         description="Name should contain only Latin letters.",
     )
-    referal_code: Union[str, None] = None
+    referal_code: Union[str, None] = Field(
+        min_length=32,
+        max_length=32,
+        pattern="^[A-Z0-9]+$",
+        description="Name should contain only Latin upper letters and digits.",
+    )
     id_city: Union[List[int], None] = []
 
 
