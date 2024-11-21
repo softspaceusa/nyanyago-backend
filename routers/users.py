@@ -17,7 +17,7 @@ from const.users_const import (AddMoney, ConfirmPayment, DeleteDebitCard,
                                UpdateUserData, UserDataPayment, Period,
                                debit_card_not_found, get_money, get_my_card,
                                order_not_found, start_sbp_answer,
-                               success_answer, task_to_text, get_user)
+                               success_answer, task_to_text, get_user, user_not_found)
 from defs import get_websocket_token, get_date_from_datetime
 from fastapi import APIRouter, HTTPException, Query, Request
 from models.authentication_db import (UsersAuthorizationData,
@@ -194,7 +194,8 @@ async def update_me_data(request: Request, item: UpdateUserData):
     return access_forbidden
 
 
-@router.get("/get_user", responses=generate_responses([get_user, access_forbidden]))
+@router.get("/get_user", responses=generate_responses([get_user, access_forbidden,
+                                                       user_not_found]))
 async def get_user(request: Request, user_id: int):
     """
     Возвращает данные пользователя.
@@ -215,6 +216,8 @@ async def get_user(request: Request, user_id: int):
     ):
         return access_forbidden
     user: dict = await UsersUser.filter(id=user_id).first().values()
+    if not user:
+        return user_not_found
     user_photo: dict = await UsersUserPhoto.filter(id_user=user_id).first().values()
     user_photo: str = (
         not_user_photo

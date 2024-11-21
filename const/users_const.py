@@ -90,6 +90,8 @@ get_user = JSONResponse(
     }
 )
 
+user_not_found = JSONResponse({"status": False,
+                               "message": "User not found!"}, 404)
 
 
 task_to_text = {
