@@ -54,6 +54,10 @@ incorrect_period = JSONResponse({"status": False,
                                  "message": "The period must be 0 or negative",
                                  }, status_code=400)
 
+incorrect_period_str = JSONResponse({"status": False,
+                                     "message": "The period must 'day', 'week', 'month', 'year'",
+                                     }, status_code=400)
+
 incorrect_user = JSONResponse({"status": False,
                               "message": "Current users do not belong to any franchise",
                                }, status_code=400)

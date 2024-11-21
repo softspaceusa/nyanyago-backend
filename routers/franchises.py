@@ -3,7 +3,7 @@ import hashlib
 import json
 import random
 import traceback
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from const.admins_const import *
 from const.dependency import (has_access_franchise, has_access_franchise_admin,
@@ -99,14 +99,15 @@ async def get_partner_by_id(request: Request):
 
 @router.get(
     "/partner_payouts",
-    responses=generate_responses([get_partner_payouts, access_forbidden]),
+    responses=generate_responses([get_partner_payouts, access_forbidden, incorrect_period_str]),
 )
-async def get_partner_payouts(request: Request):
+async def get_partner_payouts(request: Request, period: str = "day"):
     """
     Возвращает все выплаты кэшбэка партнеру
 
     Args:
         request: Объект запроса
+        period: Период (day, week, month, year)
 
     Example:
         Пример успешного ответа:
@@ -127,6 +128,20 @@ async def get_partner_payouts(request: Request):
     Returns:
         JSONResponse - выплаты кэшбэка партнеру или сообщение об ошибке доступа.
     """
+
+    if period not in ["day", "week", "month", "year"]:
+        return incorrect_period_str
+
+    today = datetime.today()
+    if period == "day":
+        start_date = today - timedelta(days=1)
+    elif period == "week":
+        start_date = today - timedelta(days=7)
+    elif period == "month":
+        start_date = today - timedelta(days=30)
+    elif period == "year":
+        start_date = today - timedelta(days=365)
+
     if (
         await UsersUserAccount.filter(id_user=request.user, id_type_account=5).count()
         == 0
@@ -135,7 +150,7 @@ async def get_partner_payouts(request: Request):
 
     payouts: list = (
         await HistoryRequestPayment.filter(
-            id_user=request.user, isCashback=True, isSuccess=True
+            id_user=request.user, isCashback=True, isSuccess=True, datetime_create__gte=start_date
         )
         .all()
         .values()
