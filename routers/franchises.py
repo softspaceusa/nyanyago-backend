@@ -316,14 +316,17 @@ async def get_new_drivers_data(request: Request):
 @router.get(
     "/drivers",
     dependencies=[Depends(has_access_franchise)],
-    responses=generate_responses([get_new_drivers]),
+    responses=generate_responses([get_new_drivers, incorrect_user]),
 )
-async def get_all_drivers(request: Request):
+async def get_all_drivers(request: Request, only_active_requests: bool = False):
     """
     Возвращает всех водителей франшизы пользователя (в т.ч. неподтверждённые аккаунты)
 
     Args:
         request (Request): Объект запроса
+        only_active_requests (bool): Возвращает список водителей,
+            у которых есть активные заявки на вывод.
+            По умолчанию - False - возвращать ВСЕХ водителей.
 
     Example:
         Пример успешного ответа:
@@ -354,6 +357,8 @@ async def get_all_drivers(request: Request):
         .first()
         .values()
     )
+    if not my_ref:
+        return incorrect_user
     data = [
         x["id_user"]
         for x in (
@@ -384,21 +389,17 @@ async def get_all_drivers(request: Request):
         photo = not_user_photo if photo is None else photo["photo_path"]
         driver_info["photo_path"] = photo
 
-        sum_of_requests_list: list = (
-            await DataUserBalanceHistory.filter(id_user=driver_info["id"], id_task=-100)
+        sum_of_active_requests_list: list = (
+            await HistoryRequestPayment.filter(id_user=driver_info["id"], isActive=True)
             .all()
             .values("money")
         )
-        sum_of_requests: float = sum([float(x["money"]) for x in sum_of_requests_list])
+        sum_of_requests: float = sum([float(x["money"]) for x in sum_of_active_requests_list])
 
-        sum_of_payouts_list: list = (
-            await DataUserBalanceHistory.filter(id_user=driver_info["id"], id_task=-101)
-            .all()
-            .values("money")
-        )
-        sum_of_payouts: float = sum([float(x["money"]) for x in sum_of_payouts_list])
-
-        driver_info["request_for_payment"] = sum_of_requests - sum_of_payouts
+        driver_info["request_for_payment"] = sum_of_requests
+        if only_active_requests:
+            if driver_info["request_for_payment"] == 0:
+                continue
         result.append(driver_info)
     for i in range(len(result) - 1):
         for j in range(len(result) - i - 1):
