@@ -474,28 +474,6 @@ async def get_stats(request: Request, period: int = 0):
     )
     all_franchise_members_id = [x["id_user"] for x in all_franchise_members]
 
-    franchise_drivers = (
-        await UsersUserAccount.filter(
-            id_user__in=all_franchise_members_id, id_type_account=2
-        )
-        .all()
-        .values()
-    )
-    franchise_drivers_id = [x["id_user"] for x in franchise_drivers]
-
-    spending_on_drivers = (
-        await HistoryRequestPayment.filter(
-            id_user__in=franchise_drivers_id,
-            isSuccess=True,
-            isActive=False,
-            datetime_create__gte=start_of_month,
-            datetime_create__lt=end_of_month,
-        )
-        .all()
-        .values("money")
-    )
-    spending_on_drivers = sum(-float(x["money"]) for x in spending_on_drivers)
-
     spending_on_bonuses = (
         await DataUserBalanceHistory.filter(
             id_user__in=all_franchise_members_id,
@@ -522,29 +500,15 @@ async def get_stats(request: Request, period: int = 0):
         -float(x["money"]) for x in received_due_to_commission
     )
 
-    received_due_to_users = (
-        await DataUserBalanceHistory.filter(
-            id_user__in=all_franchise_members_id,
-            id_task=-1,
-            datetime_create__gte=start_of_month,
-            datetime_create__lt=end_of_month,
-        )
-        .all()
-        .values("money")
-    )
-    received_due_to_users = sum(float(x["money"]) for x in received_due_to_users)
-
     return JSONResponse(
         {
             "status": True,
             "message": "Success!",
             "minus": {
-                "spending_on_drivers": spending_on_drivers,
                 "spending_on_bonuses": spending_on_bonuses,
             },
             "plus": {
                 "received_due_to_commission": received_due_to_commission,
-                "received_due_to_users": received_due_to_users,
             },
         }
     )

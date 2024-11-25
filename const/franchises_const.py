@@ -43,11 +43,9 @@ get_my_referals = JSONResponse({"status": True,
 get_money_stats = JSONResponse({"status": True,
                                 "message": "Success!",
                                 "minus": {
-                                    "spending_on_drivers": 0.0,
-                                    "spending_on_bonuses": 0.0, },
+                                    "spending_on_bonuses": 0.0},
                                 "plus": {
-                                    "received_due_to_commission": 0.0,
-                                    "received_due_to_users": 0.0}})
+                                    "received_due_to_commission": 0.0}})
 
 
 incorrect_period = JSONResponse({"status": False,
