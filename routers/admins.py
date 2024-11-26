@@ -110,19 +110,25 @@ async def get_franchise_admins() -> SuccessGetFranchiseAdmins:
     logger.debug(users)
     for user in users:
         if user["id"] not in users: #user_id key help to add double row with cities
-            response_data[user["id"]] = {
-                "id": user["id"],
-                "phone": user["phone"],
-                "cities": [{
-                    "id": user["id_city"],
-                    "title": user["title"]
-                }] if user["id_city"] else None
-            }
+            try:
+                response_data[user["id"]] = FranchiseAdmin(
+                    id= user["id"],
+                    phone= user["phone"],
+                    cities=[City(
+                        id= user["id_city"],
+                        title= user["title"]
+                    )] if user["id_city"] else None
+                )
+            except Exception:
+                logger.error(f"Row: {user} has incorrect format")
         else:
-            response_data[user["id"]]["cities"].append({
-                "id": user["id_city"],
-                "title": user["title"]
-            })
+            try:
+                response_data[user["id"]].cities.append(City(
+                    id=user["id_city"],
+                    title=user["title"]
+                ))
+            except Exception:
+                logger.error(f"Row: {user} has incorrect format")
     logger.debug(response_data)
     validate=FranchiseAdmins(response_data.values())
     return SuccessGetFranchiseAdmins(franchise_admins=validate)

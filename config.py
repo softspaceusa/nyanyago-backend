@@ -7,7 +7,7 @@ class Settings(BaseSettings):
     app_name: str = "AutoNanny"
     ssl_certfile: str = "fullchain.pem"
     ssl_keyfile: str = "privkey.pem"
-    port: int = 4443
+    port: int = 443
     log_level: str = "debug"
     report_file_path: str = "./"
 
@@ -18,11 +18,7 @@ class Settings(BaseSettings):
     test_driver_login: str = os.environ.get("TEST_DRIVER_LOGIN")
     test_driver_password: str = os.environ.get("TEST_DRIVER_PASSWORD")
 
-    class Config:
-        env_file = ".env"
 
-
-print(os.getcwd())
 load_dotenv(dotenv_path="../../.env")
 load_dotenv(dotenv_path="../.env")
 load_dotenv(dotenv_path=".env")
