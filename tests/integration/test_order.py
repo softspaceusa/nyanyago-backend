@@ -11,6 +11,7 @@ from tests.conftest import franchise
 pytest.login = settings.test_franchise_admin_login
 pytest.password = settings.test_franchise_admin_password
 
+
 """
 def test_create_tariff(franchise):
     new_tariff = {

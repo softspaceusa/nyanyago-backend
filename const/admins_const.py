@@ -110,8 +110,8 @@ class Role(int, Enum):
 
 class NewUser(BaseModel):
     phone: str = Field(
-        pattern=r"^\+7 \(\d{3}\) \d{3} \d{2} \d{2}$",
-        description="Phone format: '+7 (999) 999 99 99'",
+        pattern=r"^\+7\d{10}$",
+        description="Phone format: '+79999999999'",
     )
     password: str = Field(
         min_length=8,
@@ -203,8 +203,8 @@ class City(BaseModel):
 class FranchiseAdmin(BaseModel):
     id: int
     phone: str = Field(
-        pattern=r"^\+7 \(\d{3}\) \d{3} \d{2} \d{2}$",
-        description="Phone format: '+7 (999) 999 99 99'",
+        pattern=r"^\+7\d{10}$",
+        description="Phone format: '+79999999999'",
     )
     cities: List[City] | None
 
