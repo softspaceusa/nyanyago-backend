@@ -1,4 +1,4 @@
-from typing import Generator, List, Optional, Any
+from typing import Generator, Union, Optional, Any
 from dataclasses import dataclass
 from asyncio import get_event_loop
 
@@ -39,16 +39,16 @@ class TestClient(AsyncClient):
 
     async def delete(
             self,
-            url: URL | str,
+            url: Union[URL, str],
             *,
-            params: QueryParamTypes | None = None,
-            headers: HeaderTypes | None = None,
-            cookies: CookieTypes | None = None,
-            json: Any | None = None,
-            auth: AuthTypes | UseClientDefault = USE_CLIENT_DEFAULT,
-            follow_redirects: bool | UseClientDefault = USE_CLIENT_DEFAULT,
-            timeout: TimeoutTypes | UseClientDefault = USE_CLIENT_DEFAULT,
-            extensions: RequestExtensions | None = None,
+            params: Union[QueryParamTypes, None] = None,
+            headers: Union[HeaderTypes, None] = None,
+            cookies: Union[CookieTypes, None] = None,
+            json: Union[Any, None] = None,
+            auth: Union[AuthTypes, UseClientDefault] = USE_CLIENT_DEFAULT,
+            follow_redirects: Union[bool, UseClientDefault] = USE_CLIENT_DEFAULT,
+            timeout: Union[TimeoutTypes, UseClientDefault] = USE_CLIENT_DEFAULT,
+            extensions: Union[RequestExtensions, None] = None,
     ) -> Response:
         """
         Send a `DELETE` request.

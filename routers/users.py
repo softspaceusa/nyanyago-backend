@@ -279,7 +279,7 @@ async def get_user(request: Request, user_id: int):
 
 @router.post("/money",
              responses=generate_responses([get_money]))
-async def get_my_money(request: Request, item: Union[LimitOffset, None] = None, period: Period | SkipJsonSchema[None] = None):
+async def get_my_money(request: Request, item: Union[LimitOffset, None] = None, period: Union[Period, SkipJsonSchema[None]] = None):
 
     now = datetime.datetime.now()
     if period == Period.current_day.value:

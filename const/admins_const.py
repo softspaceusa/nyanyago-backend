@@ -206,7 +206,7 @@ class FranchiseAdmin(BaseModel):
         pattern=r"^\+7\d{10}$",
         description="Phone format: '+79999999999'",
     )
-    cities: List[City] | None
+    cities: Union[List[City], None]
 
 
 class FranchiseAdmins(RootModel):
