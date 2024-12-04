@@ -109,32 +109,32 @@ class Role(int, Enum):
 
 
 class NewUser(BaseModel):
-    phone: str = Field(
-        pattern=r"^\+7\d{10}$",
-        description="Phone format: '+79999999999'",
-    )
+    phone: str
     password: str = Field(
         min_length=8,
         description="Password with min 8 characters, containing at least one uppercase letter, one digit, and one special character",
     )
     role: Role
-    surname: str = Field(
+    surname: Union[str, None] = Field(
         min_length=2,
         max_length=50,
-        pattern="^[a-zA-Z]+$",
+        pattern="^[a-zA-ZЁёА-я]+$",
         description="Surname should contain only Latin letters.",
+        default=None
     )
-    name: str = Field(
+    name: Union[str, None] = Field(
         min_length=2,
         max_length=50,
-        pattern="^[a-zA-Z]+$",
+        pattern="^[a-zA-ZЁёА-я]+$",
         description="Name should contain only Latin letters.",
+        default=None
     )
     referal_code: Union[str, None] = Field(
         min_length=32,
         max_length=32,
         pattern="^[A-Z0-9]+$",
         description="Name should contain only Latin upper letters and digits.",
+        default=None
     )
     id_city: Union[List[int], None] = []
 
