@@ -252,11 +252,30 @@ async def get_all_user(item: GetUsers):
                          "total": total})
 
 
-@router.post("/ban-user",
-             responses=generate_responses([success_answer, user_not_found]))
+@router.post(
+    "/ban-user", responses=generate_responses([success_answer, user_not_found])
+)
 async def delete_user(item: GetUser, request: Request):
+    """
+    Блокирует/разблокирует пользователя в зависимости от его текущего статуса.
+
+    Этот эндпоинт управляет блокировкой и снятием блокировки пользователей. Когда пользователя
+    блокируют, — его учетная запись деактивируется, а связанные с ней данные, такие как участие в чате и
+    данные водителя обновляются соответствующим образом.
+    Если пользователь уже заблокирован, это действие отменяет запрет и повторно активирует
+    учетную запись и связанные с ней данные.
+
+    Args:
+        item (GetUser): {"id": 1} - ID пользователя, которого нужно заблокировать/разблокировать.
+        request (Request): Объект запроса
+
+    Returns:
+        JSONResponse - ответ, содержащий статус и сообщение операции.
+    """
     if request.user == item.id:
-        return JSONResponse({"status": False, "message": "Can't delete main admin!"}, 404)
+        return JSONResponse(
+            {"status": False, "message": "Can't delete main admin!"}, 404
+        )
     user = await UsersUser.filter(id=item.id).first().values()
     if user is None:
         return user_not_found
@@ -265,7 +284,10 @@ async def delete_user(item: GetUser, request: Request):
         await UsersVerifyAccount.create(id_user=item.id)
         if await UsersDriverData.filter(id_driver=item.id).count() > 0:
             await UsersDriverData.filter(id_driver=item.id).update(isActive=True)
-        chats=[x["id_chat"] for x in (await ChatsChatParticipant.filter(id_user=item.id).all().values())]
+        chats = [
+            x["id_chat"]
+            for x in (await ChatsChatParticipant.filter(id_user=item.id).all().values())
+        ]
         for each in chats:
             await ChatsChat.filter(id=each).update(isActive=True)
 
@@ -273,7 +295,10 @@ async def delete_user(item: GetUser, request: Request):
         await UsersUser.filter(id=item.id).update(isActive=False)
         await UsersVerifyAccount.filter(id_user=item.id).delete()
         await UsersBearerToken.filter(id_user=item.id).delete()
-        chats=[x["id_chat"] for x in (await ChatsChatParticipant.filter(id_user=item.id).all().values())]
+        chats = [
+            x["id_chat"]
+            for x in (await ChatsChatParticipant.filter(id_user=item.id).all().values())
+        ]
         for each in chats:
             await ChatsChat.filter(id=each).update(isActive=False)
         if await UsersDriverData.filter(id_driver=item.id).count() > 0:
