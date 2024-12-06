@@ -197,8 +197,8 @@ async def get_partners_referal_by_id(item: GetPartner):
     user = await UsersUser.filter(id=item.id).first().values()
     photo = await UsersUserPhoto.filter(id_user=item.id).first().values()
     photo = photo["photo_path"] if photo is not None and "photo_path" in photo else not_user_photo
-    #partner = await UsersReferalUser.filter(id_user_referal=item.id).first().values()
-    #partner = await UsersReferalCode.filter(id_user=partner["id_user"]).first().values()
+    partner = await UsersReferalUser.filter(id_user_referal=item.id).first().values()
+    partner = await UsersReferalCode.filter(id_user=partner["id_user"]).first().values()
     return JSONResponse({"status": True,
                          "message": "Success!",
                          "data": {
@@ -206,7 +206,8 @@ async def get_partners_referal_by_id(item: GetPartner):
                              "surname": user["surname"],
                              "date_reg": await get_date_from_datetime(user["datetime_create"]),
                              "phone": user["phone"],
-                             "photo_path": photo
+                             "photo_path": photo,
+                             "partner_percent": partner["percent"]
                          }})
 
 
