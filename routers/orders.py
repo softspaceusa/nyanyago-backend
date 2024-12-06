@@ -1,14 +1,18 @@
+import datetime
+
 from tortoise.exceptions import DoesNotExist
 
 from const.const import success_answer
-from const.dependency import has_access_parent
+from const.dependency import has_access_parent, has_access_franchise
 from const.login_const import forbidden
 from models.chats_db import ChatsChatParticipant, ChatsChat
 from models.drivers_db import UsersDriverData, UsersCar, DataDriverMode
 from models.static_data_db import DataCarTariff, DataOtherDriveParametr, DataCarMark, DataCarModel, DataColor
-from const.orders_const import CurrentDrive, you_have_active_drive, start_current_drive, NewSchedule, get_schedule, \
-    schedule_not_found, tariff_by_id_not_found, get_schedules, Road, UpdateRoad, get_schedule_road, \
-    get_schedule_responses, AnswerResponse, get_onetime_prices, get_orders
+from const.orders_const import CurrentDrive, you_have_active_drive, start_current_drive, \
+    NewSchedule, get_schedule, \
+    schedule_not_found, tariff_by_id_not_found, get_schedules, Road, UpdateRoad, \
+    get_schedule_road, \
+    get_schedule_responses, AnswerResponse, get_onetime_prices, get_orders, OneTimeOrder
 from const.static_data_const import access_forbidden, DictToModel, not_user_photo
 from models.users_db import UsersUser, UsersUserPhoto, HistoryNotification, UsersFranchiseUser
 from models.authentication_db import UsersUserAccount, UsersBearerToken
@@ -19,6 +23,7 @@ from const.drivers_const import *
 import uuid
 import json
 
+from sevice.google_maps_api import get_lat_lon, get_distance_and_duration
 
 router = APIRouter()
 
@@ -684,3 +689,81 @@ async def get_client_token(request: Request):
 
     except DoesNotExist:
         raise HTTPException(status_code=404, detail="Client not found")
+
+
+@router.post("/new_order",
+             # dependencies=[Depends(has_access_franchise)],
+             responses=generate_responses([success_answer]))
+async def new_order(request: Request, one_time_order: OneTimeOrder):
+    """
+    Создаёт новый единоразовый заказ для данного водителя.
+
+    Валидаторы - адрес больше 5 букв, в адресе 2 или более запятые.
+
+    Адрес надо указывать так, чтоб было понятно - он потом преобразуется в координаты
+    с помощью GoogleMapsAPI. В идеале: "улица Петровка, 2, Москва, Россия, 125009".
+
+    Args:
+        request (Request): Запрос.
+        one_time_order (OneTimeOrder): Данные нового единоразового заказа.
+
+    Example:
+
+        Пример входных данных:
+
+            {
+                "id_driver": 5,
+                "from_address": "улица Воздвиженка, 3/5с2, Москва, Россия, 119019",
+                "to_address": "улица Петровка, 2, Москва, Россия, 125009",
+                "from_time": "2024-11-21T09:00:00",
+                "to_time": "2024-11-21T10:00:00",
+                "id_tariff": 5,
+            }
+    """
+    data_order = DataOrder(
+        id_driver=one_time_order.id_driver,
+        id_user=one_time_order.id_driver,  # Т.к. на вход не подаётся id клиента - пусть им будет id водителя
+        id_status=1,  # 1 = Создан
+        id_type_order=1,  # 1 = Единоразовый
+        isActive=False,  # False = Не активен (мб это значит что заказ создан, но не начался)
+    )
+
+    tariff_amount_dict: dict = await DataCarTariff.filter(id=one_time_order.id_tariff).first().values("amount")
+
+    if not tariff_amount_dict:
+        raise HTTPException(status_code=400, detail="Tariff not found")
+
+    tariff_amount: int = tariff_amount_dict["amount"]
+
+    from_lat, from_lon = get_lat_lon(one_time_order.from_address)
+    to_lat, to_lon = get_lat_lon(one_time_order.to_address)
+
+    if from_lat is None or from_lon is None or to_lat is None or to_lon is None:
+        raise HTTPException(status_code=400, detail="Invalid address")
+
+    distance_meters, duration_seconds = get_distance_and_duration(from_address=(from_lat, from_lon), to_address=(to_lat, to_lon))
+
+    await data_order.save()
+
+    await DataOrderAddresses.create(
+        id_order=data_order.id,
+        from_address=one_time_order.from_address,
+        to_address=one_time_order.to_address,
+        from_lat=from_lat,
+        from_lon=from_lon,
+        to_lat=to_lat,
+        to_lon=to_lon,
+        isFinish=True  # как я понял - указывает, что адрес конечный в данном заказе.
+    )
+
+    await DataOrderInfo.create(
+        id_order=data_order.id,
+        distance=distance_meters,
+        duration=duration_seconds,
+        id_tariff=one_time_order.id_tariff,
+        price=tariff_amount*duration_seconds/60,
+        start_time=one_time_order.from_time,
+    )
+
+    return success_answer
+

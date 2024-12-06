@@ -1,5 +1,8 @@
+from datetime import datetime
+from decimal import Decimal
+
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, field_validator
 from typing import Union, List
 
 
@@ -356,6 +359,44 @@ class Address(BaseModel):
 class DriveAddresses(BaseModel):
     from_address: Address
     to_address: Address
+
+
+class OneTimeOrder(BaseModel):
+    """
+    Одноразовый заказ (создаётся оператором для водителя).
+    """
+
+    id_driver: int = Field(..., description="ID водителя, связанного с заказом")
+    from_address: str = Field(..., description="Адрес отправления")
+    to_address: str = Field(..., description="Адрес назначения")
+    from_time: datetime = Field(..., description="Время отправления")
+    to_time: datetime = Field(..., description="Время прибытия")
+    id_tariff: int = Field(..., description="ID тарифа, связанного с заказом")
+
+    @field_validator("from_address", "to_address")
+    def validate_address(cls, address: str) -> str:  # noqa
+        if len(address.strip()) < 5:
+            raise ValueError("Адрес слишком короткий.")
+        if not any(char.isdigit() for char in address):
+            raise ValueError("Адрес должен содержать номер дома.")
+        if address.count(",") < 2:
+            raise ValueError(
+                "Адрес должен содержать минимум две запятые (например: улица, номер дома, город)"
+            )
+        return address
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "id_driver": 5,
+                "from_address": "улица Воздвиженка, 3/5с2, Москва, Россия, 119019",
+                "to_address": "улица Петровка, 2, Москва, Россия, 125009",
+                "from_time": "2024-11-21T09:00:00",
+                "to_time": "2024-11-21T10:00:00",
+                "id_tariff": 5,
+            }
+        }
+
 
 
 class OtherParams(BaseModel):

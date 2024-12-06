@@ -120,11 +120,10 @@ class DataOrderInfo(Model):
     client_lon = fields.FloatField()
     client_lat = fields.FloatField()
     price = fields.DecimalField(10, 2)
-    distance = fields.BigIntField()
-    duration = fields.BigIntField()
+    distance = fields.BigIntField()  # Расстояние в метрах
+    duration = fields.BigIntField()  # Время в секундах
     description = fields.TextField()
     id_tariff = fields.BigIntField(null=False)
-
 
     class Meta:
         schema = "data"
