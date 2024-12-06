@@ -62,8 +62,7 @@ get_partners_referal = JSONResponse({"status": True,
                                         "surname": "string",
                                         "date_reg": "string",
                                         "phone": "string",
-                                        "photo_path": "string",
-                                        "partner_percent": 0
+                                        "photo_path": "string"
                                     }})
 get_users = JSONResponse({"status": True,
                           "message": "Success!",

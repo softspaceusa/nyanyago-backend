@@ -278,6 +278,7 @@ async def create_franchise_user(item):
 
 @atomic(connection_name="default")
 async def create_partner_user(item):
+    logger.debug(f"The item was received: {item}")
     user = await UsersUser.create(phone=item.phone, name=item.name, surname=item.surname)
     await UsersAuthorizationData.create(id_user=user.id, login=item.phone,
                                         password=str((hashlib.md5(item.password.encode())).hexdigest()))

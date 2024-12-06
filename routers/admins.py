@@ -53,7 +53,6 @@ def generate_responses(answers: list):
                                            error_create_user]))
 async def new_user(item: NewUser):
     item.phone = await check_correct_phone(item.phone)
-
     if item.phone is None: return uncorrect_phone
     if await UsersUser.filter(phone=item.phone).count()>0:
         return user_already_creates
@@ -61,18 +60,10 @@ async def new_user(item: NewUser):
         return unsupported_role
     if item.role == 5:
         try:
-            create_partner_user(item)
+            await create_partner_user(item)
         except:
             logger.error("Can't create user in DB")
             return error_create_user
-        try:
-            api = SmsAero("auto.nyany@yandex.ru", "344334Auto")
-            api.send(item.phone, f"Ваши данные для входа в аккаунт АвтоНяни:\n\n"
-                                 f"Логин: {item.phone}\n"
-                                 f"Пароль: {item.password}\n")
-        except Exception:
-            await error(traceback.format_exc())
-            return new_user_message_dont_delivery
     else:
         try:
             await create_franchise_user(item)
@@ -80,14 +71,14 @@ async def new_user(item: NewUser):
             logger.error("Can't create user in DB")
             return error_create_user
 
-        try:
-            api = SmsAero("auto.nyany@yandex.ru", "344334Auto")
-            api.send(item.phone, f"Ваши данные для входа в аккаунт АвтоНяни:\n\n"
+    try:
+        api = SmsAero("auto.nyany@yandex.ru", "344334Auto")
+        api.send(item.phone, f"Ваши данные для входа в аккаунт АвтоНяни:\n\n"
                                  f"Логин: {item.phone}\n"
                                  f"Пароль: {item.password}\n")
-        except Exception:
-            await error(traceback.format_exc())
-            return new_user_message_dont_delivery
+    except Exception:
+        await error(traceback.format_exc())
+        return new_user_message_dont_delivery
     return success_answer
 
 
@@ -206,8 +197,8 @@ async def get_partners_referal_by_id(item: GetPartner):
     user = await UsersUser.filter(id=item.id).first().values()
     photo = await UsersUserPhoto.filter(id_user=item.id).first().values()
     photo = photo["photo_path"] if photo is not None and "photo_path" in photo else not_user_photo
-    partner = await UsersReferalUser.filter(id_user_referal=item.id).first().values()
-    partner = await UsersReferalCode.filter(id_user=partner["id_user"]).first().values()
+    #partner = await UsersReferalUser.filter(id_user_referal=item.id).first().values()
+    #partner = await UsersReferalCode.filter(id_user=partner["id_user"]).first().values()
     return JSONResponse({"status": True,
                          "message": "Success!",
                          "data": {
@@ -215,8 +206,7 @@ async def get_partners_referal_by_id(item: GetPartner):
                              "surname": user["surname"],
                              "date_reg": await get_date_from_datetime(user["datetime_create"]),
                              "phone": user["phone"],
-                             "photo_path": photo,
-                             "partner_percent": partner["percent"]
+                             "photo_path": photo
                          }})
 
 
