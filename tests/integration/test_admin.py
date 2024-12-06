@@ -20,7 +20,6 @@ async def test_create_franchise(admin):
         "role": 6,
         "surname": "string",
         "name": "string",
-        "referal_code": None,
         "id_city": []
     }
     response = await admin.conn.post("/admins/new_user", json=new_user)
