@@ -125,11 +125,12 @@ async def get_franchise_admins() -> SuccessGetFranchiseAdmins:
     return SuccessGetFranchiseAdmins(franchise_admins=validate)
 
 
+"""
 @router.post("/get_partners",
              responses=generate_responses([get_partners]))
 async def get_partners(item: Union[GetPartners, None] = None):
     if item is not None:
-        data=await UsersUserAccount.filter(id_type_account=5).order_by("-id").offset(item.offset).limit(item.limit).values()
+        data = await UsersUserAccount.filter(id_type_account=5).order_by("-id").offset(item.offset).limit(item.limit).values()
     else:
         data = await UsersUserAccount.filter(id_type_account=2).order_by("-id").all().values()
     users = []
@@ -152,7 +153,38 @@ async def get_partners(item: Union[GetPartners, None] = None):
     return JSONResponse({"status": True,
                          "message": "Success!",
                          "partners": partners})
+"""
 
+@router.post("/get_partners",
+             responses=generate_responses([get_partners]))
+async def get_partners(item: Union[GetPartners, None] = None):
+    SQL_REQUEST = ('SELECT u.id, u.surname, u.name, u.datetime_create, u.phone, ua.id_type_account FROM users.user AS u '
+                   'LEFT JOIN users.user_account AS ua ON u.id=ua.id_user '
+                   'INNER JOIN users.referal_code AS rc ON u.id=rc.id_user '
+                   'WHERE ua.id_type_account=5 '
+                   f'LIMIT {item.limit} OFFSET {item.offset};')
+    conn = Tortoise.get_connection("default")
+    logger.debug(SQL_REQUEST)
+    users = await conn.execute_query_dict(SQL_REQUEST)
+    logger.debug(users)
+    for partner in users:
+        photo = await UsersUserPhoto.filter(id_user=partner["id"]).first().values()
+        photo = not_user_photo if photo is None or "photo_path" not in photo else photo["photo_path"]
+        partner["photo_path"] = photo
+        partner["datetime_create"] = await get_date_from_datetime(partner["datetime_create"])
+        partner["roles"] = [partner["id_type_account"]]
+        del partner["id_type_account"]
+        del partner["phone"]
+    partners = []
+    if item is not None and item.search is not None:
+        for partner in users:
+            if (partner["name"] is not None and partner["surname"] is not None) and \
+                (item.search.lower() in partner["name"].lower() or item.search.lower() == partner["name"].lower() or
+                item.search.lower() in partner["surname"].lower() or item.search.lower() == partner["surname"].lower()):
+                partners.append(partner)
+    return JSONResponse({"status": True,
+                         "message": "Success!",
+                         "partners": partners})
 
 @router.post("/get_partner",
              responses=generate_responses([partner_not_found, get_partner]))
@@ -167,9 +199,12 @@ async def get_partner_by_id(item: GetPartner):
     referals = await UsersReferalUser.filter(id_user=item.id).order_by("-id").all().values()
     for ref in referals:
         refer_data = await UsersUser.filter(id=ref["id_user_referal"]).first().values()
+        ref_roles = await UsersUserAccount.filter(id_user=ref["id_user_referal"]).values("id_type_account")
         ref["name"] = refer_data["name"]
         ref["surname"] = refer_data["surname"]
         ref["date_reg"] = await get_date_from_datetime(refer_data["datetime_create"])
+        ref["roles"] = [next(iter(role.values())) for role in ref_roles] # get values from list of dictonaries
+        logger.debug(ref["roles"])
         del ref["datetime_create"]
         del ref["id"]
         del ref["id_user"]
