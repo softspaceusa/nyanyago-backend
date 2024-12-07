@@ -33,7 +33,7 @@ get_partners = JSONResponse({"status": True,
                                      "isActive": True,
                                      "datetime_create": "string",
                                      "photo_path": "string",
-                                     "roles": [5]
+                                     "role": [5]
                                  }
                              ]})
 get_partner = JSONResponse({"status": True,
@@ -53,7 +53,7 @@ get_partner = JSONResponse({"status": True,
                                      "phone": "string",
                                      "isActive": True,
                                      "date_reg": "string",
-                                     "roles": [1]
+                                     "role": [1]
                                  }
                              ]
                          }})
