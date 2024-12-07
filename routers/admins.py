@@ -172,7 +172,7 @@ async def get_partners(item: Union[GetPartners, None] = None):
         photo = not_user_photo if photo is None or "photo_path" not in photo else photo["photo_path"]
         partner["photo_path"] = photo
         partner["datetime_create"] = await get_date_from_datetime(partner["datetime_create"])
-        partner["roles"] = [partner["id_type_account"]]
+        partner["role"] = [partner["id_type_account"]]
         del partner["id_type_account"]
         del partner["phone"]
     partners = []
@@ -203,8 +203,8 @@ async def get_partner_by_id(item: GetPartner):
         ref["name"] = refer_data["name"]
         ref["surname"] = refer_data["surname"]
         ref["date_reg"] = await get_date_from_datetime(refer_data["datetime_create"])
-        ref["roles"] = [next(iter(role.values())) for role in ref_roles] # get values from list of dictonaries
-        logger.debug(ref["roles"])
+        ref["role"] = [next(iter(role.values())) for role in ref_roles] # get values from list of dictonaries
+        logger.debug(ref["role"])
         del ref["datetime_create"]
         del ref["id"]
         del ref["id_user"]
