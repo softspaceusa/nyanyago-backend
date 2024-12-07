@@ -3,7 +3,8 @@ import os
 from const.dependency import has_access_franchise
 from const.static_data_const import not_user_photo, not_found_other_parametr,OtherDriveParametr,UpdateOtherDriveParametr
 from models.authentication_db import UsersUserAccount, UsersReferalCode, UsersAuthorizationData, UsersBearerToken
-from models.users_db import UsersVerifyAccount, UsersUserPhoto, UsersReferalUser
+from models.users_db import UsersVerifyAccount, UsersUserPhoto, UsersReferalUser, \
+    UsersFranchiseUser
 from models.users_db import HistoryPaymentTink, UsersUser
 from const.login_const import uncorrect_phone, user_already_creates, error_create_user
 from defs import check_correct_phone, error, get_date_from_datetime
@@ -314,6 +315,16 @@ async def ban_user(item: GetUser, request: Request):
         return JSONResponse(
             {"status": False, "message": "Can't delete main admin!"}, 404
         )
+    type_account = await UsersUserAccount.filter(id_user=item.id).first().values()
+    if type_account is None:
+        return user_not_found
+    if type_account["id_type_account"] == 6:
+        req_user_franchise = await UsersFranchiseUser.filter(id_user=request.user).first().values()
+        req_user_franchise_id = req_user_franchise["id_franchise"]
+        ban_user_franchise = await UsersFranchiseUser.filter(id_user=item.id).first().values()
+        ban_user_franchise_id = ban_user_franchise["id_franchise"]
+        if req_user_franchise_id != ban_user_franchise_id:
+            return JSONResponse({"status": False, "message": "You don't have access to this user!"}, 404)
     user = await UsersUser.filter(id=item.id).first().values()
     if user is None:
         return user_not_found
