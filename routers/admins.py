@@ -1,6 +1,7 @@
 import os
 
 from const.static_data_const import not_user_photo, not_found_other_parametr,OtherDriveParametr,UpdateOtherDriveParametr
+from main import PROTECTED_FRANCHISES
 from models.authentication_db import UsersUserAccount, UsersReferalCode, UsersAuthorizationData, UsersBearerToken
 from models.users_db import UsersVerifyAccount, UsersUserPhoto, UsersReferalUser
 from models.users_db import HistoryPaymentTink, UsersUser
@@ -253,9 +254,11 @@ async def get_all_user(item: GetUsers):
 
 
 @router.post(
-    "/ban-user", responses=generate_responses([success_answer, user_not_found])
+    "/ban-user",
+    responses=generate_responses([success_answer, user_not_found]),
+    dependencies=PROTECTED_FRANCHISES
 )
-async def delete_user(item: GetUser, request: Request):
+async def ban_user(item: GetUser, request: Request):
     """
     Блокирует/разблокирует пользователя в зависимости от его текущего статуса.
 
