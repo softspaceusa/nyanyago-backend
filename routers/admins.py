@@ -1,7 +1,7 @@
 import os
 
+from const.dependency import has_access_franchise
 from const.static_data_const import not_user_photo, not_found_other_parametr,OtherDriveParametr,UpdateOtherDriveParametr
-from main import PROTECTED_FRANCHISES
 from models.authentication_db import UsersUserAccount, UsersReferalCode, UsersAuthorizationData, UsersBearerToken
 from models.users_db import UsersVerifyAccount, UsersUserPhoto, UsersReferalUser
 from models.users_db import HistoryPaymentTink, UsersUser
@@ -16,7 +16,7 @@ from sevice.admin_service import ReportMaker, create_franchise_user, create_part
 from common.logger import logger
 
 from fastapi.responses import FileResponse
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Request, Depends
 from starlette.background import BackgroundTask
 from const.admins_const import *
 from tortoise.models import Q
@@ -291,7 +291,7 @@ async def get_all_user(item: GetUsers):
 @router.post(
     "/ban-user",
     responses=generate_responses([success_answer, user_not_found]),
-    dependencies=PROTECTED_FRANCHISES
+    dependencies=[Depends(has_access_franchise)]
 )
 async def ban_user(item: GetUser, request: Request):
     """
