@@ -155,6 +155,8 @@ get_schedules = JSONResponse({"status": True,
                                           "id_user": 0,
                                           "duration": 0,
                                           "children_count": 0,
+                                          "isActive": True,
+                                          "datetime_create": "2024-01-01 00:00:00.00000",
                                           "week_days": [
                                                             0
                                           ],
