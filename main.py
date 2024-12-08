@@ -1,7 +1,7 @@
 from config import settings
 from routers import authentication, files, static_data, chats, drivers, users, chats_websocket, admins, orders, payments
 from routers import franchises, orders_socket, mains
-from const.dependency import has_access_admin, has_access_franchise, has_access
+from const.dependency import has_access_admin, has_access_franchise, has_access, has_access_franchise_admin_and_main_admin
 from const.dependency import BearerTokenAuthBackend, has_access_files
 from starlette.middleware.authentication import AuthenticationMiddleware
 from tortoise.contrib.fastapi import register_tortoise
@@ -92,6 +92,13 @@ app.include_router(
     admins.router,
     prefix="/api/v1.0/admins",
     dependencies=PROTECTED_ADMINS,
+    tags=["Admins"]
+)
+
+app.include_router(
+    admins.router_for_franchise_admin,
+    prefix="/api/v1.0/admins",
+    dependencies=[Depends(has_access_franchise_admin_and_main_admin)],
     tags=["Admins"]
 )
 
