@@ -122,6 +122,26 @@ async def has_access_franchise(credentials: HTTPAuthorizationCredentials=Depends
             detail=str(e))
 
 
+async def has_access_franchise_admin_and_main_admin(credentials: HTTPAuthorizationCredentials=Depends(security)):
+    token = credentials.credentials
+    if token == "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZF91c2VyIjotMSwiZmJpZCI6IlJlZ2lzdHJhd" \
+                                    "GlvbiIsImV4cCI6NDg0MjY2NzY2NX0.lzICh4ya1hVSehS4tCFLBTwOTD6TDxaxoBpJgt6YRrw":
+        raise HTTPException(403, "Forbidden")
+    try:
+        jwt.decode(token, key=secret_key, options={"verify_signature": False,
+                                                           "verify_aud": False,
+                                                           "verify_iss": False})
+        user = await UsersBearerToken.filter(token=token).first().values()
+        if await UsersUserAccount.filter(id_user=user["id_user"], id_type_account__in=[6, 7]).count() == 0:
+            print(user["id_user"], user["id_type_account"])
+            raise HTTPException(403, "Forbidden")
+        return token
+    except JOSEError as e:  # catches any exception
+        raise HTTPException(
+            status_code=401,
+            detail=str(e))
+
+
 async def has_access_franchise_admin(credentials: HTTPAuthorizationCredentials=Depends(security)):
     token = credentials.credentials
     if token == "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZF91c2VyIjotMSwiZmJpZCI6IlJlZ2lzdHJhd" \

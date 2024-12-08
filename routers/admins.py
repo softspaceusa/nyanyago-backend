@@ -1,6 +1,5 @@
 import os
 
-from const.dependency import has_access_franchise
 from const.static_data_const import not_user_photo, not_found_other_parametr,OtherDriveParametr,UpdateOtherDriveParametr
 from models.authentication_db import UsersUserAccount, UsersReferalCode, UsersAuthorizationData, UsersBearerToken
 from models.users_db import UsersVerifyAccount, UsersUserPhoto, UsersReferalUser, \
@@ -24,12 +23,12 @@ from tortoise.models import Q
 from tortoise import Tortoise
 from smsaero import SmsAero
 import traceback
-import hashlib
 import decimal
 import json
 
 
 router = APIRouter()
+router_for_franchise_admin = APIRouter()
 
 
 def generate_responses(answers: list):
@@ -289,10 +288,9 @@ async def get_all_user(item: GetUsers):
                          "total": total})
 
 
-@router.post(
+@router_for_franchise_admin.post(
     "/ban-user",
-    responses=generate_responses([success_answer, user_not_found]),
-    dependencies=[Depends(has_access_franchise)]
+    responses=generate_responses([success_answer, user_not_found])
 )
 async def ban_user(item: GetUser, request: Request):
     """
