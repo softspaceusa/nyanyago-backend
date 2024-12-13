@@ -306,6 +306,7 @@ class WaitDataScheduleRoadDriver(Model):
     id_driver = fields.BigIntField(null=False)
     isActive = fields.BooleanField(default=True)
     datetime_create = fields.DatetimeField(null=True)
+    full_time = fields.BooleanField(default=True)
 
 
     class Meta:

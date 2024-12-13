@@ -448,65 +448,229 @@ async def start_one_current_drive(request: Request, item: CurrentDrive):
     return token
 
 
-@router.get("/get_schedule_responses",
-            responses=generate_responses([get_schedule_responses]))
+@router.get(
+    "/get_schedule_responses", responses=generate_responses([get_schedule_responses])
+)
 async def get_schedule_responses(request: Request):
-    schedules_id = [x["id"] for x in (await DataSchedule.filter(id_user=request.user, isActive=False).all().values())]
-    answer, success_driver, roads, i = [], [], {}, 0
-    data = await WaitDataScheduleRoadDriver.filter(id_schedule__in=schedules_id,
-                                                   isActive=True).order_by("id").all().values()
-    print(data)
-    for each in data:
-        print(each)
-        print(roads)
-        if len(success_driver) == 0:
-            success_driver.append(each["id_driver"])
-        if each["id_driver"] not in roads:
-            roads[each["id_driver"]]=[each["id_road"]]
-        else:
-            roads[each["id_driver"]]+=[each["id_road"]]
-        if each["id_driver"] != success_driver[-1] or (i==len(data) or i+1==len(data)):
-            chats = [x["id_chat"] for x in (await ChatsChatParticipant.filter(id_user=request.user).all().values())]
-            if await ChatsChatParticipant.filter(id_user=success_driver[-1], id_chat__in=chats).count() == 0:
-                chat = await ChatsChat.create()
-                await ChatsChatParticipant.create(id_chat=chat.id, id_user=request.user)
-                await ChatsChatParticipant.create(id_chat=chat.id, id_user=success_driver[-1])
-                chat_id = chat.id
-            else:
-                chats = await ChatsChatParticipant.filter(id_user=success_driver[-1], id_chat__in=chats).all().values()
-                chat_id = None
-                for chat in chats:
-                    if await ChatsChat.filter(id=chat["id_chat"], isActive=True).count() > 0:
-                        chat_id = chat["id_chat"]
-                        break
-                if chat_id is None:
-                    chat=await ChatsChat.create()
-                    await ChatsChatParticipant.create(id_chat=chat.id, id_user=request.user)
-                    await ChatsChatParticipant.create(id_chat=chat.id, id_user=success_driver[-1])
-                    chat_id=chat.id
+    """
+    Функция возвращает список водителей, готовых к выполнению расписаний текущего пользователя,
+    и подробной информации о них.
 
-            photo = await UsersUserPhoto.filter(id_user=success_driver[-1]).first().values()
-            photo = photo["photo_path"] if photo is not None or "photo_path" in photo else not_user_photo
-            road_ans = []
-            for road in roads[success_driver[-1]]:
-                road_info = await DataScheduleRoad.filter(id=road).first().values()
-                road_ans.append({"id_road": road, "week_day": road_info["week_day"]})
-            ans = {
-                "id": each["id"],
-                "id_driver": each["id_driver"],
-                "name": (await UsersUser.filter(id=success_driver[-1]).first().values())["name"],
-                "photo_path": photo,
-                "id_schedule": each["id_schedule"],
-                "id_chat": chat_id,
-                "data": road_ans
+    Args:
+        request (Request): Объект запроса.
+
+    Returns:
+        JSONResponse: JSON-ответ с информацией о водителях.
+
+    Example:
+
+        Пример ответа:
+
+            {
+              "status": true,
+              "message": "Success!",
+              "responses": [
+                {
+                  "id_driver": 14,
+                  "name": "Евген",
+                  "photo_path": "https://nyanyago.ru/api/v1.0/files/9b75f2b1-4768-483f-b220-f5463f511ac5104edf9e-83c7-4347-bd12-3d1e886761501728468831.0238381000072405",
+                  "id_schedule": "9, 10",
+                  "id_chat": 21,
+                  "full_time": true,
+                  "data": [
+                    {
+                      "id_road": 17,
+                      "week_day": 0
+                    },
+                    {
+                      "id_road": 18,
+                      "week_day": 0
+                    },
+                  ]
+                }
+              ]
             }
-            print(ans)
-            answer.append(ans)
-        success_driver.append(each["id_driver"])
-        i += 1
-    return JSONResponse({"status": True,
-                         "message": "Success!",
-                         "responses": answer})
+    """
+    async def get_user_schedules(user):
+        """
+        Получает 'расписания' текущего пользователя, которые есть в БД, но они не активны.
+        Т.е. как-бы ещё не выполняются ('ждут', пока за них возьмутся водители).
+
+        Args:
+            user (int): ID пользователя.
+
+        Returns:
+            list: Список ID расписаний.
+        """
+        return [
+            x["id"]
+            for x in await DataSchedule.filter(id_user=user, isActive=False).values()
+        ]
+
+    async def get_active_data(schedules_id):
+        """
+        Получает данные из таблицы 'заявок водителей' для расписаний текущего пользователя.
+
+        Args:
+            schedules_id (list): Список ID расписаний.
+
+        Returns:
+            list: Список из данных об активных заявках водителей.
+        """
+        return (
+            await WaitDataScheduleRoadDriver.filter(
+                id_schedule__in=schedules_id, isActive=True
+            )
+            .order_by("id_driver")
+            .values()
+        )
+
+    async def get_or_create_chat(user, driver):
+        """
+        Создаёт чат между указанным пользователем и водителем, если его нет.
+
+        Args:
+            user (int): ID пользователя.
+            driver (int): ID водителя.
+
+        Returns:
+            int: ID чата.
+        """
+        chats = [
+            x["id_chat"]
+            for x in await ChatsChatParticipant.filter(id_user=user).values()
+        ]
+        existing_chats = await ChatsChatParticipant.filter(
+            id_user=driver, id_chat__in=chats
+        ).values()
+
+        for chat in existing_chats:
+            if await ChatsChat.filter(id=chat["id_chat"], isActive=True).exists():
+                return chat["id_chat"]
+
+        # Создать новый чат, если его нет
+        new_chat = await ChatsChat.create()
+        await ChatsChatParticipant.create(id_chat=new_chat.id, id_user=user)
+        await ChatsChatParticipant.create(id_chat=new_chat.id, id_user=driver)
+        return new_chat.id
+
+    async def get_driver_info(driver_id):
+        """
+        Получает информацию о водителе (имя и фото).
+
+        Args:
+            driver_id (int): ID водителя.
+
+        Returns:
+            dict: Информация о водителе.
+        """
+        user = await UsersUser.filter(id=driver_id).first()
+        photo = await UsersUserPhoto.filter(id_user=driver_id).first()
+        return {
+            "name": user.name if user else "Unknown",
+            "photo_path": (
+                photo.photo_path if photo and photo.photo_path else not_user_photo
+            ),
+        }
+
+    async def get_roads_info(road_ids):
+        """
+        Получает информацию о маршрутах (ID, день недели).
+
+        Args:
+            road_ids (list): Список ID маршрутов.
+
+        Returns:
+            list: Информация о маршрутах.
+        """
+        roads = []
+        for road_id in road_ids:
+            road = await DataScheduleRoad.filter(id=road_id).first()
+            if road:
+                roads.append({"id_road": road_id, "week_day": road.week_day})
+        return roads
+
+    async def get_drivers_schedules(driver_id):
+        """
+        Возвращает список из ID расписаний, на которые откликнулся водитель.
+
+        Args:
+            driver_id (int): ID водителя.
+
+        Returns:
+            set: Список ID расписаний.
+        """
+        schedules_set = set()
+        for row in await WaitDataScheduleRoadDriver.filter(
+                id_driver=driver_id, id_schedule__in=schedules_id
+        ).all():
+            schedules_set.add(row.id_schedule)
+        return schedules_set
+
+    async def is_full_time_driver(driver_id):
+        row = await WaitDataScheduleRoadDriver.filter(
+            id_driver=driver_id, id_schedule__in=schedules_id
+        ).first()
+        return row.full_time
+
+    schedules_id = await get_user_schedules(request.user)
+
+    data = await get_active_data(schedules_id)
+
+    answer = []
+    driver_roads = {}
+    previous_driver = None
+
+    for each in data:
+        driver_id = each["id_driver"]
+        road_id = each["id_road"]
+
+        if driver_id not in driver_roads:
+            driver_roads[driver_id] = set()
+        driver_roads[driver_id].add(road_id)
+
+        if driver_id != previous_driver:
+            if previous_driver is not None:
+                chat_id = await get_or_create_chat(request.user, previous_driver)
+                driver_info = await get_driver_info(previous_driver)
+                road_info = await get_roads_info(list(driver_roads[previous_driver]))
+                schedules = await get_drivers_schedules(previous_driver)
+                is_full_time = await is_full_time_driver(previous_driver)
+
+                answer.append(
+                    {
+                        "id_driver": previous_driver,
+                        "name": driver_info["name"],
+                        "photo_path": driver_info["photo_path"],
+                        "id_schedule": ', '.join(str(x) for x in schedules),
+                        "id_chat": chat_id,
+                        "full_time": is_full_time,
+                        "data": road_info,
+                    }
+                )
+
+            previous_driver = driver_id
+
+    if previous_driver:
+        chat_id = await get_or_create_chat(request.user, previous_driver)
+        driver_info = await get_driver_info(previous_driver)
+        road_info = await get_roads_info(list(driver_roads[previous_driver]))
+        schedules = await get_drivers_schedules(previous_driver)
+        is_full_time = await is_full_time_driver(previous_driver)
+
+        answer.append(
+            {
+                "id_driver": previous_driver,
+                "name": driver_info["name"],
+                "photo_path": driver_info["photo_path"],
+                "id_schedule": ', '.join(str(x) for x in schedules),
+                "id_chat": chat_id,
+                "full_time": is_full_time,
+                "data": road_info,
+            }
+        )
+
+    return JSONResponse({"status": True, "message": "Success!", "responses": answer})
 
 
 @router.post("/answer_schedule_responses",

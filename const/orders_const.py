@@ -58,12 +58,12 @@ get_schedule_responses = JSONResponse({"status": True,
                                        "message": "Success!",
                                        "responses": [
                                            {
-                                               "id": 0,
                                                "name": "string",
                                                "photo_path": "string",
                                                "id_driver": 0,
                                                "id_chat": 0,
-                                               "id_schedule": 0,
+                                               "id_schedule": "string",
+                                               "full_time": True,
                                                "data": [
                                                             {
                                                                 "id_road": 0,
