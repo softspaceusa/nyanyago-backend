@@ -39,6 +39,7 @@ get_messages = JSONResponse({"status": True,
                              "id_chat": 1,
                              "messages": [
                                             {
+                                                "id": 0,
                                                 "msg": "string",
                                                 "msgType": 0,
                                                 "timestamp_send": 0,
