@@ -128,25 +128,59 @@ async def get_chat_by_id(request: Request, item: GetChat):
                          }})
 
 
-@router.post("/get_messages",
-             responses=generate_responses([get_messages]))
+@router.post("/get_messages", responses=generate_responses([get_messages]))
 async def get_chat_by_id(request: Request, item: GetMessages):
-    if await ChatsChatParticipant.filter(id_chat=item.id_chat, id_user=request.user).count() == 0:
+    """
+    Возвращает сообщения из указанного чата.
+
+    Args:
+        request (Request): Объект запроса, содержащий информацию о пользователе.
+        item (GetMessages): Данные запроса, содержащие идентификатор чата, смещение и лимит.
+
+    Example:
+
+        Пример запроса:
+
+            {
+                "id_chat": 1,
+                "offset": 0,
+                "limit": 10
+            }
+
+    Returns:
+        JSONResponse: Ответ, содержащий статус операции, ID чата, список сообщений и общее количество сообщений.
+    """
+    if (
+        await ChatsChatParticipant.filter(
+            id_chat=item.id_chat, id_user=request.user
+        ).count()
+        == 0
+    ):
         raise HTTPException(403, "Forbidden")
     chat = await ChatsChat.filter(id=item.id_chat).first().values()
-    mes = await ChatsMessage.filter(id_chat=item.id_chat).order_by("-id").offset(item.offset).limit(item.limit).values()
+    mes = (
+        await ChatsMessage.filter(id_chat=item.id_chat)
+        .order_by("-id")
+        .offset(item.offset)
+        .limit(item.limit)
+        .values()
+    )
     count = await ChatsMessage.filter(id_chat=item.id_chat).count()
-    await HistoryChatNotification.filter(id_user=request.user,id_chat=chat["id"],is_readed=False).update(is_readed=True)
+    await HistoryChatNotification.filter(
+        id_user=request.user, id_chat=chat["id"], is_readed=False
+    ).update(is_readed=True)
     for message in mes:
-        del message["id"]
         del message["id_chat"]
         message["isMe"] = False
         if message["id_sender"] == request.user:
             message["isMe"] = True
         del message["id_sender"]
-    return JSONResponse({"status": True,
-                         "message": "Success!",
-                         "id_chat": chat["id"],
-                         "messages": mes,
-                         "total": count
-                         })
+    return JSONResponse(
+        {
+            "status": True,
+            "message": "Success!",
+            "id_chat": chat["id"],
+            "messages": mes,
+            "total": count,
+        }
+    )
