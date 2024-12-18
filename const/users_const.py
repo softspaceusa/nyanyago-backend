@@ -29,11 +29,14 @@ order_not_found = JSONResponse({"status": False,
 get_money = JSONResponse({"status": True,
                           "message": "Success!",
                           "balance": 0.0,
+                          "income": [0],
+                          "expenses": [0],
                           "history": [
                                         {
                                             "title": "string",
                                             "amount": "string",
-                                            "description": "string"
+                                            "description": "string",
+                                            "date": "string"
                                         }
                                     ]
                           })

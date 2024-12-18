@@ -277,9 +277,69 @@ async def get_user(request: Request, user_id: int):
     return JSONResponse({"status": True, "message": "Success!", "user": user})
 
 
-@router.post("/money",
-             responses=generate_responses([get_money]))
-async def get_my_money(request: Request, item: Union[LimitOffset, None] = None, period: Union[Period, SkipJsonSchema[None]] = None):
+@router.post("/money", responses=generate_responses([get_money]))
+async def get_my_money(
+    request: Request,
+    item: Union[LimitOffset, None] = None,
+    period: Union[Period, SkipJsonSchema[None]] = None,
+):
+    """
+    Обрабатывает запрос на получение баланса пользователя и истории операций.
+
+    Args:
+        request (Request): Объект запроса.
+        item (LimitOffset): Для пагинации. ПОКА НЕ РЕАЛИЗОВАНО.
+        period (str): Период. Query-параметр.
+            Может быть только: `current_day`, `current_week`, `current_month`, `current_year`.
+
+    Example:
+
+        Пример успешного ответа:
+
+        {
+          "status": true,
+          "message": "Success!",
+          "balance": 23,
+          "income": [
+            10,
+            37,
+          ],
+          "expenses": [
+            -12,
+            -12,
+          ],
+          "history": [
+            {
+              "description": "Зачисление бонусов от Франшизы",
+              "title": "Начисление бонусов",
+              "date": "10/5",
+              "amount": "10.00"
+            },
+            {
+              "description": "Зачисление бонусов от Франшизы",
+              "title": "Начисление бонусов",
+              "date": "10/5",
+              "amount": "37.00"
+            },
+            {
+              "description": "Начисление комиссии от Франшизы",
+              "title": "Начисление комиссии",
+              "date": "7/11",
+              "amount": "-12.00"
+            },
+            {
+              "description": "Начисление комиссии от Франшизы",
+              "title": "Начисление комиссии",
+              "date": "7/11",
+              "amount": "-12.00"
+            },
+          ]
+        }
+
+
+    Returns:
+        JSONResponse: Баланс пользователя и история операций.
+    """
 
     now = datetime.datetime.now()
     if period == Period.current_day.value:
@@ -293,22 +353,30 @@ async def get_my_money(request: Request, item: Union[LimitOffset, None] = None, 
         start_date = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
         end_date = now.replace(hour=23, minute=59, second=59, microsecond=999999)
     elif period == Period.current_year.value:
-        start_date = now.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
+        start_date = now.replace(
+            month=1, day=1, hour=0, minute=0, second=0, microsecond=0
+        )
         end_date = now.replace(hour=23, minute=59, second=59, microsecond=999999)
     else:
-        return JSONResponse({"status": False, "message": "Invalid period."}, status_code=400)
+        return JSONResponse(
+            {"status": False, "message": "Invalid period."}, status_code=400
+        )
 
     balance = await DataUserBalance.filter(id_user=request.user).first().values()
     if balance is None or len(balance) == 0:
         await DataUserBalance.create(id_user=request.user, money=decimal.Decimal(0.0))
         balance = {"money": 0.0}
 
-    history = await DataUserBalanceHistory.filter(
-        id_user=request.user,
-        isComplete=True,
-        datetime_create__gte=start_date,
-        datetime_create__lte=end_date
-    ).all().values()
+    history = (
+        await DataUserBalanceHistory.filter(
+            id_user=request.user,
+            isComplete=True,
+            datetime_create__gte=start_date,
+            datetime_create__lte=end_date,
+        )
+        .exclude(id_task=-100)
+        .values()
+    )
 
     income_list = []
     expenses_list = []
@@ -321,7 +389,9 @@ async def get_my_money(request: Request, item: Union[LimitOffset, None] = None, 
             expenses_list.append(float(each["money"]))
 
         each["title"] = task_to_text.get(each["id_task"], "Unknown Task")
-        each["date"] = f"{each['datetime_create'].date().day}/{each['datetime_create'].date().month}"
+        each["date"] = (
+            f"{each['datetime_create'].date().day}/{each['datetime_create'].date().month}"
+        )
         each["amount"] = str(each["money"])
         del each["id"]
         del each["money"]
@@ -332,15 +402,16 @@ async def get_my_money(request: Request, item: Union[LimitOffset, None] = None, 
 
         detailed_history.append(each)
 
-    return JSONResponse({
-        "status": True,
-        "message": "Success!",
-        "balance": float(balance["money"]),
-        "income": income_list,
-        "expenses": expenses_list,
-        "history": detailed_history
-    })
-
+    return JSONResponse(
+        {
+            "status": True,
+            "message": "Success!",
+            "balance": float(balance["money"]),
+            "income": income_list,
+            "expenses": expenses_list,
+            "history": detailed_history,
+        }
+    )
 
 
 @router.post("/get-my-card",
