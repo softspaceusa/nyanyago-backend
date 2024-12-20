@@ -15,7 +15,7 @@ from const.orders_const import CurrentDrive, you_have_active_drive, start_curren
     schedule_not_found, tariff_by_id_not_found, get_schedules, Road, UpdateRoad, \
     get_schedule_road, \
     get_schedule_responses, AnswerResponse, get_onetime_prices, get_orders, \
-    OneTimeOrder, GetTotalPrice, get_total_price
+    OneTimeOrder, GetTotalPrice, get_total_price, UpdateSchedule
 from const.static_data_const import access_forbidden, DictToModel, not_user_photo
 from models.users_db import UsersUser, UsersUserPhoto, HistoryNotification, UsersFranchiseUser
 from models.authentication_db import UsersUserAccount, UsersBearerToken
@@ -50,6 +50,82 @@ def generate_responses(answers: list):
                                     "description": description
         }
     return answer
+
+
+@router.put("/schedule")
+async def update_schedule(request: Request, item: UpdateSchedule):
+    """
+    Обновляет расписание. Во входных данных обязателен только id.
+
+    Args:
+        request (Request): Запрос
+        item (UpdateSchedule): Данные
+
+    Example:
+
+        Пример входных данных:
+
+            {
+              "id": 33,
+              "title": "test_change_sch",
+              "description": "test_change_sch_des",
+              "duration": 7,
+              "children_count": 3,
+              "id_tariff": 1
+            }
+
+    Returns:
+        JSONResponse: Ответ
+    """
+    if await DataCarTariff.filter(isActive=True, id=item.id_tariff).count() == 0:
+        return tariff_by_id_not_found
+    schedule = await DataSchedule.filter(id=item.id, id_user=request.user).first()
+    if schedule is None:
+        return schedule_not_found
+    if item.title is not None and len(item.title) > 0:
+        await DataSchedule.filter(id=item.id).update(title=item.title)
+    if item.description is not None and len(item.description) > 0:
+        await DataSchedule.filter(id=item.id).update(description=item.description)
+    if item.duration is not None and len(str(item.duration)) > 0:
+        await DataSchedule.filter(id=item.id).update(duration=item.duration)
+    if item.children_count is not None and len(str(item.children_count)) > 0:
+        await DataSchedule.filter(id=item.id).update(children_count=item.children_count)
+    if item.week_days is not None and len(item.week_days) > 0:
+        await DataSchedule.filter(id=item.id).update(
+            week_days=";".join(map(str, item.week_days))
+        )
+    if item.id_tariff is not None and len(str(item.id_tariff)) > 0:
+        await DataSchedule.filter(id=item.id).update(id_tariff=item.id_tariff)
+
+    if item.other_parametrs is not None and len(item.other_parametrs) > 0:
+        for params in item.other_parametrs:
+            if (
+                await DataOtherDriveParametr.filter(
+                    id=params.parametr, isActive=True
+                ).count()
+                == 0
+            ):
+                continue
+
+            if (
+                await DataScheduleOtherParametrs.filter(
+                    id_schedule=schedule.id, id_other_parametr=params.parametr
+                ).count()
+                > 0
+            ):
+                await DataScheduleOtherParametrs.filter(
+                    id_schedule=schedule.id, id_other_parametr=params.parametr
+                ).update(amount=params.count)
+                continue
+
+            await DataScheduleOtherParametrs.create(
+                id_schedule=schedule.id,
+                id_other_parametr=params.parametr,
+                amount=params.count,
+            )
+
+    return success_answer
+
 
 
 @router.post(
@@ -493,18 +569,18 @@ async def get_total_price(item: GetTotalPrice):
         Пример входных данных:
 
             {
-              "id_tariff": 0,
+              "id_tariff": 1,
               "addresses": [
                 {
                   "from_address": {
-                    "address": "string",
+                    "address": "Кремль, Москва",
                     "location": {
                       "latitude": 0,
                       "longitude": 0
                     }
                   },
                   "to_address": {
-                    "address": "string",
+                    "address": "ВДНХ, Москва",
                     "location": {
                       "latitude": 0,
                       "longitude": 0
@@ -570,6 +646,7 @@ async def get_total_price(item: GetTotalPrice):
 async def update_schedule_road(request: Request, item: UpdateRoad):
     """
     Обновляет маршрут с данным ID в расписании/графике/контракте.
+    Во входных данных обязателен только id.
 
     Если задать координаты адресов как ноль (0), то координаты для адресов
     будут получаться с помощью GoogleMapsAPI.

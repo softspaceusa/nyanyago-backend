@@ -456,6 +456,17 @@ class NewSchedule(BaseModel):
     roads: List[Road]
 
 
+class UpdateSchedule(BaseModel):
+    id: int
+    title: Union[str, None] = None # Количество дней
+    description: Union[str, None] = None # Количество дней
+    duration: Union[int, None] = None # Количество дней
+    children_count: Union[int, None] = None
+    week_days: Union[list, None] = None # Номера дней от 0 до 6 (Пн, Вт, Ср, Чт, Пт, Сб, Вс) == (0, 1, 2, 3, 4, 5, 6)
+    id_tariff: Union[int, None] = None # get_tariffs by user's franchise
+    other_parametrs: Union[List[OtherParams], None] = None
+
+
 class ReadSchedule(BaseModel):
     id: int
     title: str  # Количество дней
