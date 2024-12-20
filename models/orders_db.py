@@ -213,10 +213,10 @@ class DataScheduleRoad(Model):
     title = fields.TextField(null=True)
     start_time = fields.TextField()
     end_time = fields.TextField()
-    type_drive = fields.TextField()
+    type_drive = fields.TextField()  # Тип поездки: в одну сторону, туда-обратно, с промежуточными точками (0, 1, 2)
     isActive = fields.BooleanField(default=True)
     datetime_create = fields.DatetimeField(null=True)
-    amount = fields.BigIntField(null=True)
+    amount = fields.DecimalField(10, 2)
 
 
     class Meta:

@@ -7,7 +7,7 @@ API_KEY = "AIzaSyAal05yap1WdDdZrF0KrrqzcdvY3E8-D68"  # TODO: перемести�
 gmaps = googlemaps.Client(key=API_KEY)
 
 
-def get_lat_lon(
+async def get_lat_lon(
     address: str,
 ) -> tuple:  # TODO: `get_lat_lon` мб надо сделать асинхронной
     """
@@ -27,14 +27,15 @@ def get_lat_lon(
         return None, None
 
 
-def get_distance_and_duration(
-    from_address: Union[str, tuple], to_address: Union[str, tuple]
-) -> tuple:
+async def get_distance_and_duration(
+    from_address: Union[str, dict], to_address: Union[str, dict]
+) -> tuple:  # TODO: `get_distance_and_duration` мб надо сделать асинхронной
     """
     Получает расстояние и время в пути между двумя точками
+    Если задавать адреса в виде координат, то вот пример: {"lat": 55.93, "lng": -3.118}.
     Args:
-        from_address (Union[str, tuple]): Начальная точка. В виде строчного адреса или координат.
-        to_address (Union[str, tuple]): Конечная точка. В виде строчного адреса или координат.
+        from_address (Union[str, dict]): Начальная точка. В виде строчного адреса или координат.
+        to_address (Union[str, dict]): Конечная точка. В виде строчного адреса или координат.
 
     Returns:
         tuple: Расстояние в метрах, время в секундах

@@ -347,6 +347,10 @@ get_driver_token = JSONResponse({"status": True,
                                    "message": "Success!",
                                    "websocket_token": "string"})
 
+get_total_price = JSONResponse({"status": True,
+                                "message": "Success!",
+                                "total_price": "string",
+                                "accurately": True})
 
 class NowLocation(BaseModel):
     latitude: float
@@ -434,8 +438,12 @@ class UpdateRoad(BaseModel):
     end_time: Union[str, None] = None
     addresses: Union[List[DriveAddresses], None] = None
     title: Union[str, None] = None
-    type_drive: Union[list, None] = None
+    type_drive: Union[list, None] = None  # Тип поездки: в одну сторону, туда-обратно, с промежуточными точками (0, 1, 2)
 
+
+class GetTotalPrice(BaseModel):
+    id_tariff: int
+    addresses: List[DriveAddresses]
 
 class NewSchedule(BaseModel):
     title: str # Количество дней

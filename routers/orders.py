@@ -1,8 +1,10 @@
 import datetime
+from decimal import Decimal
 
 from tortoise.exceptions import DoesNotExist
 
 from const.const import success_answer
+from const.cost_formulas import get_total_cost_of_the_trip
 from const.dependency import has_access_parent, has_access_franchise
 from const.login_const import forbidden
 from models.chats_db import ChatsChatParticipant, ChatsChat
@@ -12,7 +14,8 @@ from const.orders_const import CurrentDrive, you_have_active_drive, start_curren
     NewSchedule, get_schedule, \
     schedule_not_found, tariff_by_id_not_found, get_schedules, Road, UpdateRoad, \
     get_schedule_road, \
-    get_schedule_responses, AnswerResponse, get_onetime_prices, get_orders, OneTimeOrder
+    get_schedule_responses, AnswerResponse, get_onetime_prices, get_orders, \
+    OneTimeOrder, GetTotalPrice, get_total_price
 from const.static_data_const import access_forbidden, DictToModel, not_user_photo
 from models.users_db import UsersUser, UsersUserPhoto, HistoryNotification, UsersFranchiseUser
 from models.authentication_db import UsersUserAccount, UsersBearerToken
@@ -49,53 +52,209 @@ def generate_responses(answers: list):
     return answer
 
 
-@router.post("/schedule",
-             responses=generate_responses([success_answer,
-                                           tariff_by_id_not_found]))
+@router.post(
+    "/schedule", responses=generate_responses([success_answer, tariff_by_id_not_found])
+)
 async def create_schedule(request: Request, item: NewSchedule):
+    """
+    Создаёт график/расписание/контракт, а также его маршруты.
+
+    Args:
+        request (Request): Запрос.
+        item (NewSchedule): График/расписание/контракт.
+
+    Examples:
+
+        Пример входных данных:
+
+            {
+              "title": "test_create_sch1",
+              "description": "test_create_sch1",
+              "duration": 7,
+              "children_count": 1,
+              "week_days": [
+                "1"
+              ],
+              "id_tariff": 1,
+              "other_parametrs": [],
+              "roads": [
+                {
+                  "week_day": 1,
+                  "start_time": "11:11",
+                  "end_time": "12:12",
+                  "addresses": [
+                    {
+                      "from_address": {
+                        "address": "Метро Красные Ворота, Москва",
+                        "location": {
+                          "latitude": 0,
+                          "longitude": 0
+                        }
+                      },
+                      "to_address": {
+                        "address": "Останкинская телебашня, Москва",
+                        "location": {
+                          "latitude": 0,
+                          "longitude": 0
+                        }
+                      }
+                    }
+                  ],
+                  "title": "road_for_test_sch1",
+                  "type_drive": [
+                    "0"
+                  ]
+                }
+              ]
+            }
+
+    Returns:
+        JSONResponse: Ответ.
+    """
     print(item.__dict__)
-    #TODO: Проверка на достаточный баланс для создания графика
+    # TODO: Проверка на достаточный баланс для создания графика
     if await DataCarTariff.filter(isActive=True, id=item.id_tariff).count() == 0:
         return tariff_by_id_not_found
-    schedule = await DataSchedule.create(id_user=request.user, title=item.title,
-                                         children_count=item.children_count, duration=item.duration,
-                                         id_tariff=item.id_tariff, description=item.description,
-                                         week_days=";".join(map(str, item.week_days)))
+    schedule = await DataSchedule.create(
+        id_user=request.user,
+        title=item.title,
+        children_count=item.children_count,
+        duration=item.duration,
+        id_tariff=item.id_tariff,
+        description=item.description,
+        week_days=";".join(map(str, item.week_days)),
+        isActive=True,
+    )
     for params in item.other_parametrs:
-        if await DataOtherDriveParametr.filter(id=params.parametr, isActive=True).count() == 0:
+        if (
+            await DataOtherDriveParametr.filter(
+                id=params.parametr, isActive=True
+            ).count()
+            == 0
+        ):
             continue
-        await DataScheduleOtherParametrs.create(id_schedule=schedule.id, id_other_parametr=params.parametr,
-                                                amount=params.count)
+        await DataScheduleOtherParametrs.create(
+            id_schedule=schedule.id,
+            id_other_parametr=params.parametr,
+            amount=params.count,
+        )
+
+    all_roads = []
+
     for road in item.roads:
-        new_road = await DataScheduleRoad.create(id_schedule=schedule.id, week_day=road.week_day,
-                                                 title=road.title, start_time=road.start_time,
-                                                 end_time=road.end_time, type_drive=";".join(map(str, road.type_drive)))
+        new_road = await DataScheduleRoad.create(
+            id_schedule=schedule.id,
+            week_day=road.week_day,
+            title=road.title,
+            start_time=road.start_time,
+            end_time=road.end_time,
+            type_drive=";".join(map(str, road.type_drive)),
+        )
+
+        tariff_amount_dict: dict = (
+            await DataCarTariff.filter(id=item.id_tariff).first().values("amount")
+        )
+
+        if not tariff_amount_dict:
+            return JSONResponse({"status": False, "message": "Tariff not found!"}, 404)
+
+        tariff_amount: int = tariff_amount_dict["amount"]
+
+        total_price: float = 0.0  # Общая стоимость поездки
+
+        all_addresses = []
+
         for address in road.addresses:
-            from math import radians, cos, sin, asin, sqrt
+            from_lat, from_lon = (
+                address.from_address.location.latitude,
+                address.from_address.location.longitude,
+            )
+            to_lat, to_lon = (
+                address.to_address.location.latitude,
+                address.to_address.location.longitude,
+            )
+            if (
+                address.from_address.location.longitude == 0
+                and address.from_address.location.latitude == 0
+            ):
+                from_lat, from_lon = await get_lat_lon(address.from_address.address)
+            if (
+                address.to_address.location.longitude == 0
+                and address.to_address.location.latitude == 0
+            ):
+                to_lat, to_lon = await get_lat_lon(address.to_address.address)
 
-            def haversine(lon1, lat1, lon2, lat2):
-                """
-                Calculate the great circle distance in kilometers between two points
-                on the earth (specified in decimal degrees)
-                """
-                # convert decimal degrees to radians
-                lon1, lat1, lon2, lat2=map(radians, [lon1, lat1, lon2, lat2])
+            distance, duration = await get_distance_and_duration(
+                from_address={"lat": from_lat, "lng": from_lon},
+                to_address={"lat": to_lat, "lng": to_lon},
+            )
 
-                # haversine formula
-                dlon=lon2 - lon1
-                dlat=lat2 - lat1
-                a=sin(dlat / 2) ** 2 + cos(lat1) * cos(lat2) * sin(dlon / 2) ** 2
-                c=2 * asin(sqrt(a))
-                r=6371  # Radius of earth in kilometers. Use 3956 for miles. Determines return value units.
-                return int(c * r)
-            await DataScheduleRoadAddress.create(id_schedule_road=new_road.id,
-                                                 from_address=address.from_address.address,
-                                                 to_address=address.to_address.address,
-                                                 from_lon=address.from_address.location.longitude,
-                                                 from_lat=address.from_address.location.latitude,
-                                                 to_lon=address.to_address.location.longitude,
-                                                 to_lat=address.to_address.location.latitude)
-    return success_answer
+            total_price += get_total_cost_of_the_trip(
+                M=tariff_amount, S2=distance, To=duration
+            )
+
+            all_addresses.append(
+                {
+                    "from_address": address.from_address.address,
+                    "to_address": address.to_address.address,
+                    "from_lat": from_lat,
+                    "from_lon": from_lon,
+                    "to_lat": to_lat,
+                    "to_lon": to_lon,
+                }
+            )
+
+            await DataScheduleRoadAddress.create(
+                id_schedule_road=new_road.id,
+                from_address=address.from_address.address,
+                to_address=address.to_address.address,
+                from_lon=from_lon,
+                from_lat=from_lat,
+                to_lon=to_lon,
+                to_lat=to_lat,
+            )
+
+        if 1 in list(map(int, road.type_drive)):
+            total_price *= 2
+
+        await DataScheduleRoad.filter(id=new_road.id).update(amount=total_price)
+
+        total_price_from_db = (
+            await DataScheduleRoad.filter(id=new_road.id).first().values("amount")
+        )
+
+        total_price_from_db = str(total_price_from_db["amount"])
+
+        all_roads.append(
+            {
+                "id": new_road.id,
+                "title": road.title,
+                "week_day": road.week_day,
+                "start_time": road.start_time,
+                "end_time": road.end_time,
+                "type_drive": ";".join(map(str, road.type_drive)),
+                "addresses": all_addresses,
+                "price": total_price_from_db,
+            }
+        )
+
+    return JSONResponse(
+        {
+            "status": True,
+            "message": "Success!",
+            "created_schedule": {
+                "id_user": request.user,
+                "title": item.title,
+                "children_count": item.children_count,
+                "duration": item.duration,
+                "id_tariff": item.id_tariff,
+                "description": item.description,
+                "week_days": ";".join(map(str, item.week_days)),
+                "all_roads": all_roads,
+            },
+        },
+        200,
+    )
 
 
 @router.get("/schedule/{id}",
@@ -240,21 +399,40 @@ async def delete_schedule(request: Request, id: int):
     return success_answer
 
 
-@router.delete("/schedule_road/{id}",
-               responses=generate_responses([success_answer,
-                                             schedule_not_found,
-                                             access_forbidden]),
-               dependencies=[Depends(has_access_parent)])
+@router.delete(
+    "/schedule_road/{id}",
+    responses=generate_responses(
+        [success_answer, schedule_not_found, access_forbidden]
+    ),
+    dependencies=[Depends(has_access_parent)],
+)
 async def delete_schedule_road(request: Request, id: int):
+    """
+    Удаляет маршрут с данным ID из расписания/графика/контракта (заодно делая связь
+    маршрут-водитель неактивной)
+
+    Args:
+        request (Request): Объект запроса
+        id (int): ID маршрута
+
+    Returns:
+        JSONResponse: Ответ в формате JSON
+    """
+
     if await DataScheduleRoad.filter(id=id, isActive=True).count() == 0:
         return schedule_not_found
     road = await DataScheduleRoad.filter(id=id).first().values()
-    if await DataSchedule.filter(id_user=request.user, id=road["id_schedule"], isActive__in=[True, False]).count() == 0:
+    if (
+        await DataSchedule.filter(
+            id_user=request.user, id=road["id_schedule"], isActive__in=[True, False]
+        ).count()
+        == 0
+    ):
         return access_forbidden
-    if await DataScheduleRoadDriver.filter(id_schedule_road=id, isActive=True).count() > 0:
-        road_order = await DataScheduleRoadDriver.filter(id_schedule_road=id, isActive=True).all().values()
     await DataScheduleRoad.filter(id=id, isActive=True).update(isActive=False)
-    #if await DataSchedule.filter(id_user=request.user, id=road["id_schedule"], isActive=True).count() > 0:
+    await DataScheduleRoadDriver.filter(id_schedule_road=id, isActive=True).update(
+        isActive=False
+    )
     return success_answer
 
 
@@ -285,41 +463,282 @@ async def create_schedule_road(request: Request, id: int, item: Road):
                          "id": new_road.id})
 
 
-@router.put("/schedule_road",
-            responses=generate_responses([success_answer,
-                                          schedule_not_found]))
+@router.post(
+    "/get_total_price",
+    responses=generate_responses([get_total_price]),
+)
+async def get_total_price(item: GetTotalPrice):
+    """
+    Возвращает общую стоимость поездки.
+    Если задать координаты адресов как ноль (0), то координаты для адресов
+    будут получаться с помощью GoogleMapsAPI.
+    Если поездка туда-обратно - надо будет домоножить на 2 (api вручную этого не делает).
+
+    Значение поля accurately равно True только когда на вход подаётся одна пара адресов.
+    Так как если пар несколько - то может быть неточность, связанная с тем, что с течением
+    времени могут возникнуть пробки, либо наоборот и тд.
+
+
+    Пример тарифов (взято из БД 20.12.2024):
+        - 78 руб/км - эконом - id=1
+        - 108 руб/км - комфорт - id=2
+        - 138 руб/км - бизнес - id=4
+        - 198 руб/км - минивэн - id=5
+        - 243 руб/км - премиум - id=6
+
+
+
+    Example:
+
+        Пример входных данных:
+
+            {
+              "id_tariff": 0,
+              "addresses": [
+                {
+                  "from_address": {
+                    "address": "string",
+                    "location": {
+                      "latitude": 0,
+                      "longitude": 0
+                    }
+                  },
+                  "to_address": {
+                    "address": "string",
+                    "location": {
+                      "latitude": 0,
+                      "longitude": 0
+                    }
+                  }
+                }
+              ]
+            }
+
+
+    Args:
+        item (GetTotalPrice): Данные поездки
+
+    Returns:
+        JSONResponse: Ответ в формате JSON
+    """
+
+    total_price: float = 0.0
+
+    tariff_amount_dict: dict = await DataCarTariff.filter(
+        id=item.id_tariff).first().values("amount")
+
+    if not tariff_amount_dict:
+        return JSONResponse({"status": False,
+                             "message": "Tariff not found!"}, 404)
+
+    tariff_amount: int = tariff_amount_dict["amount"]
+
+    for address in item.addresses:
+        from_lat, from_lon = (
+            address.from_address.location.latitude,
+            address.from_address.location.longitude,
+        )
+        to_lat, to_lon = (
+            address.to_address.location.latitude,
+            address.to_address.location.longitude,
+        )
+        if (
+                address.from_address.location.longitude == 0
+                and address.from_address.location.latitude == 0
+        ):
+            from_lat, from_lon = await get_lat_lon(address.from_address.address)
+        if (
+                address.to_address.location.longitude == 0
+                and address.to_address.location.latitude == 0
+        ):
+            to_lat, to_lon = await get_lat_lon(address.to_address.address)
+
+        distance, duration = await get_distance_and_duration(from_address={"lat": from_lat, "lng": from_lon},
+                                                             to_address={"lat": to_lat, "lng": to_lon})
+
+        total_price += get_total_cost_of_the_trip(M=tariff_amount, S2=distance, To=duration)
+
+    return JSONResponse({"status": True,
+                         "message": "Success!",
+                         "total_price": str(round(total_price, 2)),
+                         "accurately": len(item.addresses) == 1})
+
+
+@router.put(
+    "/schedule_road", responses=generate_responses([success_answer, schedule_not_found])
+)
 async def update_schedule_road(request: Request, item: UpdateRoad):
-    print(item.id)
+    """
+    Обновляет маршрут с данным ID в расписании/графике/контракте.
+
+    Если задать координаты адресов как ноль (0), то координаты для адресов
+    будут получаться с помощью GoogleMapsAPI.
+
+    ПОКА ЧТО ВО ИЗБЕЖАНИЕ ОШИБОК - "type_drive": ["string"] -
+    ДОЛЖЕН СОДЕРЖАТЬ ТОЛЬКО 1 ЭЛЕМЕНТ (0, 1, 2) - Тип поездки: в одну сторону, туда-обратно, с промежуточными точками.
+
+
+
+    Args:
+        request (Request): Объект запроса
+        item (UpdateRoad): Данные маршрута
+
+    Example:
+
+        Пример входных данных:
+
+            {
+              "id": 0,
+              "week_day": 0,
+              "start_time": "string",
+              "end_time": "string",
+              "addresses": [
+                {
+                  "from_address": {
+                    "address": "string",
+                    "location": {
+                      "latitude": 0,
+                      "longitude": 0
+                    }
+                  },
+                  "to_address": {
+                    "address": "string",
+                    "location": {
+                      "latitude": 0,
+                      "longitude": 0
+                    }
+                  }
+                }
+              ],
+              "title": "string",
+              "type_drive": [
+                "string"
+              ]
+            }
+
+    Returns:
+        JSONResponse: Ответ в формате JSON
+    """
+
     road = await DataScheduleRoad.filter(id=item.id, isActive=True).first().values()
     if road is None or len(road) == 0:
-        print("zalupa")
         return schedule_not_found
-    if await DataSchedule.filter(id=road["id_schedule"], id_user=request.user, isActive=True).count() == 0:
-        print("vertihvost")
-        print(request.user)
-        print(road["id_schedule"])
+    if (
+        await DataSchedule.filter(
+            id=road["id_schedule"], id_user=request.user, isActive=True
+        ).count()
+        == 0
+    ):
         return schedule_not_found
     if item.title is not None and len(item.title) > 0 and road["title"] != item.title:
         await DataScheduleRoad.filter(id=item.id).update(title=item.title)
-    if item.start_time is not None and len(item.start_time) > 0 and road["start_time"] != item.start_time:
+    if (
+        item.start_time is not None
+        and len(item.start_time) > 0
+        and road["start_time"] != item.start_time
+    ):
         await DataScheduleRoad.filter(id=item.id).update(start_time=item.start_time)
-    if item.end_time is not None and len(item.end_time) > 0 and road["end_time"] != item.end_time:
+    if (
+        item.end_time is not None
+        and len(item.end_time) > 0
+        and road["end_time"] != item.end_time
+    ):
         await DataScheduleRoad.filter(id=item.id).update(end_time=item.end_time)
-    if item.week_day is not None and len(str(item.week_day)) > 0 and road["week_day"] != item.week_day:
+    if (
+        item.week_day is not None
+        and len(str(item.week_day)) > 0
+        and road["week_day"] != item.week_day
+    ):
         await DataScheduleRoad.filter(id=item.id).update(week_day=item.week_day)
     if item.type_drive is not None and len(item.type_drive) > 0:
-        await DataScheduleRoad.filter(id=item.id).update(type_drive=";".join(map(str, item.type_drive)))
+        await DataScheduleRoad.filter(id=item.id).update(
+            type_drive=";".join(map(str, item.type_drive))
+        )
+
+    id_tariff_data = await DataSchedule.filter(id=road["id_schedule"]).values("id_tariff")
+    if id_tariff_data:
+        id_tariff = id_tariff_data[0]["id_tariff"]
+    else:
+        return schedule_not_found
+
+    tariff_amount_dict: dict = await DataCarTariff.filter(
+        id=id_tariff).first().values("amount")
+
+    if not tariff_amount_dict:
+        return JSONResponse({"status": False,
+                             "message": "Tariff not found!"}, 404)
+
+    tariff_amount: int = tariff_amount_dict["amount"]
+
+    total_price: float = 0.0  # Общая стоимость поездки
+
+    all_addresses = []
+
     if item.addresses is not None and len(item.addresses) > 0:
         await DataScheduleRoadAddress.filter(id_schedule_road=item.id).delete()
         for address in item.addresses:
-            await DataScheduleRoadAddress.create(id_schedule_road=item.id,
-                                                 from_address=address.from_address.address,
-                                                 to_address=address.to_address.address,
-                                                 from_lon=address.from_address.location.longitude,
-                                                 from_lat=address.from_address.location.latitude,
-                                                 to_lon=address.to_address.location.longitude,
-                                                 to_lat=address.to_address.location.latitude)
-    return success_answer
+            from_lat, from_lon = (
+                address.from_address.location.latitude,
+                address.from_address.location.longitude,
+            )
+            to_lat, to_lon = (
+                address.to_address.location.latitude,
+                address.to_address.location.longitude,
+            )
+            if (
+                address.from_address.location.longitude == 0
+                and address.from_address.location.latitude == 0
+            ):
+                from_lat, from_lon = await get_lat_lon(address.from_address.address)
+            if (
+                address.to_address.location.longitude == 0
+                and address.to_address.location.latitude == 0
+            ):
+                to_lat, to_lon = await get_lat_lon(address.to_address.address)
+
+            distance, duration = await get_distance_and_duration(
+                from_address={"lat": from_lat, "lng": from_lon},
+                to_address={"lat": to_lat, "lng": to_lon})
+
+            total_price += get_total_cost_of_the_trip(M=tariff_amount, S2=distance, To=duration)
+
+            all_addresses.append({
+                "from_address": address.from_address.address,
+                "to_address": address.to_address.address,
+                "from_lat": from_lat,
+                "from_lon": from_lon,
+                "to_lat": to_lat,
+                "to_lon": to_lon,
+            })
+
+            await DataScheduleRoadAddress.create(
+                id_schedule_road=item.id,
+                from_address=address.from_address.address,
+                to_address=address.to_address.address,
+                from_lon=from_lon,
+                from_lat=from_lat,
+                to_lon=to_lon,
+                to_lat=to_lat,
+            )
+
+    if 1 in list(map(int, item.type_drive)):
+        total_price *= 2
+
+    await DataScheduleRoad.filter(id=item.id).update(
+        amount=total_price)
+
+    total_price_from_db = await DataScheduleRoad.filter(id=item.id).first().values("amount")
+
+    total_price_from_db = str(total_price_from_db["amount"])
+
+    return JSONResponse({"status": True,
+                         "message": "Success!",
+                         "updated_road": {
+                             "price": total_price_from_db,
+                             "id": item.id,
+                             "road_addresses": all_addresses
+                         }
+                         }, 200)
 
 
 @router.get("/schedule_road/{id}",
@@ -756,6 +1175,10 @@ async def get_driver_by_id(request: Request, item: GetDriver):
 @router.get("/get_onetime_prices",
             responses=generate_responses([get_onetime_prices]))
 async def get_onetime_prices(request: Request, duration: int, distance: int):
+    """
+    Вроде как deprecated функция.
+    См. const -> cost_formulas.py -> get_total_cost_of_the_trip().
+    """
     my_ref, result = await UsersFranchiseUser.filter(id_user=request.user).first().values(), []
     data = await DataCarTariff.filter(id_franchise=my_ref["id_franchise"],
                                       isActive=True).order_by("id").all().values("id", "amount")
@@ -786,6 +1209,10 @@ async def get_onetime_prices(request: Request, duration: int, distance: int):
             responses=generate_responses([success_answer,
                                           access_forbidden]))
 async def get_price_by_road(request: Request, id_tariff: int, duration: int, distance: int):
+    """
+    Вроде как deprecated функция.
+    См. const -> cost_formulas.py -> get_total_cost_of_the_trip().
+    """
     my_ref = await UsersFranchiseUser.filter(id_user=request.user).first().values()
     if await DataCarTariff.filter(id=id_tariff, id_franchise=my_ref["id_franchise"], isActive=True).count() == 0:
         return access_forbidden
@@ -900,13 +1327,15 @@ async def new_order(request: Request, one_time_order: OneTimeOrder):
 
     tariff_amount: int = tariff_amount_dict["amount"]
 
-    from_lat, from_lon = get_lat_lon(one_time_order.from_address)
-    to_lat, to_lon = get_lat_lon(one_time_order.to_address)
+    from_lat, from_lon = await get_lat_lon(one_time_order.from_address)
+    to_lat, to_lon = await get_lat_lon(one_time_order.to_address)
 
     if from_lat is None or from_lon is None or to_lat is None or to_lon is None:
         raise HTTPException(status_code=400, detail="Invalid address")
 
-    distance_meters, duration_seconds = get_distance_and_duration(from_address=(from_lat, from_lon), to_address=(to_lat, to_lon))
+    distance_meters, duration_seconds = await get_distance_and_duration(
+                from_address={"lat": from_lat, "lng": from_lon},
+                to_address={"lat": to_lat, "lng": to_lon})
 
     await data_order.save()
 
@@ -926,7 +1355,8 @@ async def new_order(request: Request, one_time_order: OneTimeOrder):
         distance=distance_meters,
         duration=duration_seconds,
         id_tariff=one_time_order.id_tariff,
-        price=tariff_amount*duration_seconds/60,
+        price=get_total_cost_of_the_trip(M=tariff_amount, S2=distance_meters,
+                                         To=duration_seconds),
         start_time=one_time_order.from_time,
     )
 
