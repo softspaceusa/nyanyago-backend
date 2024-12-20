@@ -124,7 +124,7 @@ async def get_other_drive_params():
 
 @router.get(
     "/tariffs",
-    dependencies=[Depends(has_access_franchise)],
+    dependencies=[Depends(has_access)],
     responses=generate_responses([get_tariffs, franchise_not_found]),
 )
 async def get_tariffs(request: Request):
