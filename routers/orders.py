@@ -1,6 +1,8 @@
 import datetime
+import math
 from decimal import Decimal
 
+import pytz
 from tortoise.exceptions import DoesNotExist
 
 from const.const import success_answer
@@ -17,7 +19,8 @@ from const.orders_const import CurrentDrive, you_have_active_drive, start_curren
     get_schedule_responses, AnswerResponse, get_onetime_prices, get_orders, \
     OneTimeOrder, GetTotalPrice, get_total_price, UpdateSchedule
 from const.static_data_const import access_forbidden, DictToModel, not_user_photo
-from models.users_db import UsersUser, UsersUserPhoto, HistoryNotification, UsersFranchiseUser
+from models.users_db import UsersUser, UsersUserPhoto, HistoryNotification, \
+    UsersFranchiseUser, DataUserBalance, DataUserBalanceHistory
 from models.authentication_db import UsersUserAccount, UsersBearerToken
 from fastapi import APIRouter, Request, Depends, HTTPException
 from defs import check_access_schedule, sendPush, get_time_drive, get_order_data
@@ -461,16 +464,153 @@ async def get_schedule(request: Request):
                          "schedules": schedules}, 200)
 
 
-@router.delete("/schedule/{id}",
-               responses=generate_responses([success_answer,
-                                             schedule_not_found,
-                                             access_forbidden]),
-               dependencies=[Depends(has_access_parent)])
+@router.delete(
+    "/schedule/{id}",
+    responses=generate_responses(
+        [success_answer, schedule_not_found, access_forbidden]
+    ),
+    dependencies=[Depends(has_access_parent)],
+)
 async def delete_schedule(request: Request, id: int):
+    """
+    Удаляет расписание с данным ID. Если в расписании есть маршруты, до начала которых
+    меньше получаса - возвращает 202 код, и сумму, которая будет списана
+    (половина от стоимости этого маршрута).
+
+    Args:
+        request (Request): Объект запроса
+        id (int): ID расписания
+
+    Returns:
+        JSONResponse: JSON-ответ
+    """
+
     if await DataSchedule.filter(id=id).count() == 0:
         return schedule_not_found
-    if await DataSchedule.filter(id=id, isActive__in=[True, False], id_user=request.user).count() == 0:
+    if (
+        await DataSchedule.filter(
+            id=id, isActive__in=[True, False], id_user=request.user
+        ).count()
+        == 0
+    ):
         return access_forbidden
+
+    roads = await DataScheduleRoad.filter(id_schedule=id).all()
+
+    london_now = datetime.datetime.now(pytz.timezone("Europe/London"))
+    current_week_day = london_now.weekday()
+
+    for road in roads:
+        target_time_str = road.start_time  # 'HH:MM'
+        target_week_day_str = (
+            road.week_day
+        )  # '0'-'6' (0 - Понедельник, 6 - Воскресенье)
+
+        # Преобразуем start_time в datetime с текущей датой
+        target_time = datetime.datetime.strptime(target_time_str, "%H:%M").time()
+        target_week_day = int(target_week_day_str)
+
+        # Определяем, на сколько дней вперед запланирована поездка
+        days_difference = (target_week_day - current_week_day) % 7
+
+        # Создаем datetime для поездки с правильным днем недели
+        target_datetime = london_now + datetime.timedelta(days=days_difference)
+        target_datetime = target_datetime.replace(
+            hour=target_time.hour, minute=target_time.minute, second=0, microsecond=0
+        )
+
+        # Если поездка на следующий день
+        if target_week_day != current_week_day:
+            # Определяем разницу дней (учитываем переход через неделю)
+            days_difference = (target_week_day - current_week_day) % 7
+
+            # Если поездка "в ближайшие 24 часа", добавляем день к времени
+            if days_difference == 1 and london_now.time() > target_time:
+                target_datetime += datetime.timedelta(days=1)
+
+        # Считаем разницу во времени
+        time_difference = target_datetime - london_now
+
+        # Проверка на интервал в 30 минут
+        if (
+            datetime.timedelta(minutes=0)
+            <= time_difference
+            <= datetime.timedelta(minutes=30)
+        ):
+            debit_amount_data = (
+                await DataScheduleRoad.filter(id=road.id).first().values("amount")
+            )
+            debit_amount = float(debit_amount_data["amount"]) / 2
+            debit_amount = math.floor(debit_amount * 100) / 100
+            return JSONResponse(
+                {
+                    "status": False,
+                    "message": "До одной из поездок в маршруте осталось менее 30 минут."
+                    "Для удаления - отправьте запрос на /schedule_cancel_with_debit/{id}"
+                    "С query-параметром debit_amount (сумма, которая будет списана)",
+                    "debit_amount": debit_amount,
+                },
+                202,
+            )
+
+    await DataSchedule.filter(id=id).update(isActive=None)
+    return success_answer
+
+
+@router.delete(
+    "/schedule_cancel_with_debit/{id}",
+    responses=generate_responses(
+        [success_answer, schedule_not_found, access_forbidden]
+    ),
+    dependencies=[Depends(has_access_parent)],
+)
+async def delete_schedule(request: Request, id: int, debit_amount: float):
+    """
+    Удаляет расписание и списывает деньги.
+
+    Args:
+        request (Request): Объект запроса
+        id (int): ID расписания
+        debit_amount (float): Сумма, которая будет списана
+
+    Returns:
+        JSONResponse: JSON-ответ
+    """
+
+    if await DataSchedule.filter(id=id).count() == 0:
+        return schedule_not_found
+    if (
+        await DataSchedule.filter(
+            id=id, isActive__in=[True, False], id_user=request.user
+        ).count()
+        == 0
+    ):
+        return access_forbidden
+
+    user_balance_data = (
+        await DataUserBalance.filter(id_user=request.user).first().values()
+    )
+    if user_balance_data is None:
+        return JSONResponse(
+            {"status": False, "message": "User balance not found!"}, 404
+        )
+    user_balance = float(user_balance_data["money"])
+    if user_balance < debit_amount:
+        return JSONResponse({"status": False, "message": "Insufficient balance"}, 409)
+
+    money = round(user_balance - debit_amount, 2)
+    if money < -0.01:
+        return JSONResponse({"status": False, "message": "Insufficient balance"}, 409)
+    if money < 0:
+        money = 0
+    await DataUserBalance.filter(id_user=request.user).update(money=money)
+    await DataUserBalanceHistory.create(
+        id_user=request.user,
+        id_task=-4,
+        description="Списание половины стоимости заказа (из-за отмены)",
+        money=-debit_amount,
+        isComplete=False,
+    )
     await DataSchedule.filter(id=id).update(isActive=None)
     return success_answer
 
@@ -526,17 +666,91 @@ async def create_schedule_road(request: Request, id: int, item: Road):
     new_road=await DataScheduleRoad.create(id_schedule=id, week_day=item.week_day,
                                            title=item.title, start_time=item.start_time,
                                            end_time=item.end_time, type_drive=";".join(map(str, item.type_drive)))
+
+    id_tariff_data = await DataSchedule.filter(id=id).first().values("id_tariff")
+    if id_tariff_data:
+        id_tariff = id_tariff_data["id_tariff"]
+    else:
+        return JSONResponse({"status": False, "message": "Tariff for schedule not found!"}, 404)
+
+    tariff_amount_dict: dict = (
+        await DataCarTariff.filter(id=id_tariff).first().values("amount")
+    )
+
+    if not tariff_amount_dict:
+        return JSONResponse({"status": False, "message": "Tariff not found!"}, 404)
+
+    tariff_amount: int = tariff_amount_dict["amount"]
+
+    total_price: float = 0.0  # Общая стоимость поездки
+
+    all_addresses = []
+
     for address in item.addresses:
-        await DataScheduleRoadAddress.create(id_schedule_road=new_road.id,
-                                             from_address=address.from_address.address,
-                                             to_address=address.to_address.address,
-                                             from_lon=address.from_address.location.longitude,
-                                             from_lat=address.from_address.location.latitude,
-                                             to_lon=address.to_address.location.longitude,
-                                             to_lat=address.to_address.location.latitude)
+        from_lat, from_lon = (
+            address.from_address.location.latitude,
+            address.from_address.location.longitude,
+        )
+        to_lat, to_lon = (
+            address.to_address.location.latitude,
+            address.to_address.location.longitude,
+        )
+        if (
+            address.from_address.location.longitude == 0
+            and address.from_address.location.latitude == 0
+        ):
+            from_lat, from_lon = await get_lat_lon(address.from_address.address)
+        if (
+            address.to_address.location.longitude == 0
+            and address.to_address.location.latitude == 0
+        ):
+            to_lat, to_lon = await get_lat_lon(address.to_address.address)
+
+        distance, duration = await get_distance_and_duration(
+            from_address={"lat": from_lat, "lng": from_lon},
+            to_address={"lat": to_lat, "lng": to_lon},
+        )
+
+        total_price += get_total_cost_of_the_trip(
+            M=tariff_amount, S2=distance, To=duration
+        )
+
+        all_addresses.append(
+            {
+                "from_address": address.from_address.address,
+                "to_address": address.to_address.address,
+                "from_lat": from_lat,
+                "from_lon": from_lon,
+                "to_lat": to_lat,
+                "to_lon": to_lon,
+            }
+        )
+
+        await DataScheduleRoadAddress.create(
+            id_schedule_road=new_road.id,
+            from_address=address.from_address.address,
+            to_address=address.to_address.address,
+            from_lon=from_lon,
+            from_lat=from_lat,
+            to_lon=to_lon,
+            to_lat=to_lat,
+        )
+
+    if 1 in list(map(int, item.type_drive)):
+        total_price *= 2
+
+    await DataScheduleRoad.filter(id=new_road.id).update(amount=total_price)
+
+    total_price_from_db = (
+        await DataScheduleRoad.filter(id=new_road.id).first().values("amount")
+    )
+
+    total_price_from_db = str(total_price_from_db["amount"])
+
     return JSONResponse({"status": True,
                          "message": "Success!",
-                         "id": new_road.id})
+                         "id": new_road.id,
+                         "price": total_price_from_db})
 
 
 @router.post(
@@ -1172,6 +1386,9 @@ async def get_schedule_responses(request: Request):
 @router.post("/answer_schedule_responses",
              responses=generate_responses([success_answer]))
 async def answer_schedule_responses(request: Request, item: AnswerResponse):
+    """
+    Deprecated
+    """
     if await DataSchedule.filter(isActive=False, id_user=request.user, id=item.id_schedule).count() == 0:
         return schedule_not_found
     if await WaitDataScheduleRoadDriver.filter(id=item.id_response, isActive=True).count() == 0:

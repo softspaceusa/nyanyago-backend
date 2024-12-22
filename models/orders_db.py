@@ -211,8 +211,8 @@ class DataScheduleRoad(Model):
     id_schedule = fields.BigIntField(null=False)
     week_day = fields.BigIntField()
     title = fields.TextField(null=True)
-    start_time = fields.TextField()
-    end_time = fields.TextField()
+    start_time = fields.TextField()  # Время в формате HH:MM - часовой пояс UTC
+    end_time = fields.TextField()  # Время в формате HH:MM - часовой пояс UTC
     type_drive = fields.TextField()  # Тип поездки: в одну сторону, туда-обратно, с промежуточными точками (0, 1, 2)
     isActive = fields.BooleanField(default=True)
     datetime_create = fields.DatetimeField(null=True)
