@@ -3,19 +3,24 @@ import json
 import uuid
 import time
 import traceback
-from fastapi import APIRouter, WebSocket, Request
+from fastapi import APIRouter, WebSocket, Request, Depends
 from starlette.websockets import WebSocketDisconnect
 import logging
 
+from const.cost_formulas import get_total_cost_of_the_trip
+from const.dependency import has_access
 from models.authentication_db import UsersUserAccount, UsersBearerToken
 from models.chats_db import ChatsChatParticipant, ChatsChat
 from models.drivers_db import DataDriverMode
-from models.orders_db import UsersUserOrder, DataOrder, DataOrderInfo, DataOrderAddresses, WaitDataSearchDriver
+from models.orders_db import UsersUserOrder, DataOrder, DataOrderInfo, \
+    DataOrderAddresses, WaitDataSearchDriver, DataOrderOtherParametrs
 from const.login_const import forbidden
 from const.orders_const import start_onetime_drive, CurrentDrive, JSONResponse, you_have_active_drive, \
     cant_decline_in_drive_mode
 from const.users_const import order_not_found, success_answer
 from defs import error, get_time_drive, get_order_data, sendPush, get_order_data_for_socket, get_order_data_socket
+from models.static_data_db import DataCarTariff
+from sevice.google_maps_api import get_lat_lon, get_distance_and_duration
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -641,34 +646,203 @@ async def decline_order(request: Request, id_order: int):
     return success_answer
 
 
-@router.post("/start_onetime_drive",
-             responses=generate_responses([start_onetime_drive]))
+@router.post(
+    "/start_onetime_drive", responses=generate_responses([start_onetime_drive])
+)
 async def start_onetime_drive(request: Request, item: CurrentDrive):
+    """
+    Создаёт новую единоразовую поездку. При передаче координат как нули - координаты
+    берутся из адреса.
+
+    Пример тарифов (взято из БД 20.12.2024):
+        - 78 руб/км - эконом - id=1
+        - 108 руб/км - комфорт - id=2
+        - 138 руб/км - бизнес - id=4
+        - 198 руб/км - минивэн - id=5
+        - 243 руб/км - премиум - id=6
+
+    Пример доп. параметров поездки (other_parametrs):
+        - id=1 - Встретить ребёнка
+        - id=2 - Подождать ребёнка
+        - id=3 - Помочь переодеться ребёнку
+        - id=4 - Посидеть с ребёнком
+        - id=5 - Довести ребёнка
+        - id=6 - Переодеть ребёнка
+
+
+    Example:
+
+        Пример входных данных:
+
+            {
+              "my_location": {
+                "latitude": 56,
+                "longitude": 56
+              },
+              "addresses": [
+                {
+                  "from_address": {
+                    "address": "Кремль, Москва",
+                    "location": {
+                      "latitude": 0,
+                      "longitude": 0
+                    }
+                  },
+                  "to_address": {
+                    "address": "ВДНХ, Москва",
+                    "location": {
+                      "latitude": 0,
+                      "longitude": 0
+                    }
+                  }
+                }
+              ],
+              "description": "string",
+              "idTariff": 1,
+              "other_parametrs": []
+            }
+
+        Пример выходных данных:
+
+        {
+          "status": true,
+          "message": "Success!",
+          "token": "4de84e16-a80c-410f-b79f-d08237325611096c36b1-5e4d-46fe-b275-edc394698b8a",
+          "id_order": 315,
+          "time": "1735225081.970625",
+          "addresses": [
+            {
+              "from_address": "Кремль, Москва",
+              "to_address": "ВДНХ, Москва",
+              "from_lat": 55.7509544,
+              "from_lon": 37.6175755,
+              "to_lat": 55.831,
+              "to_lon": 37.6298
+            }
+          ],
+          "total_price": 1305.18,
+          "total_distance_meters": 13244,
+          "total_duration_seconds_estimated": 1751
+        }
+
+
+    Args:
+        request (Request): Объект запроса
+        item (CurrentDrive): Данные поездки
+
+    Returns:
+        JSONResponse: Ответ с данными созданной поездки и токен
+    """
     order = await DataOrder.create(id_user=request.user, id_status=1, id_type_order=1)
-    await DataOrderInfo.create(id_order=order.id, client_lon=item.my_location.longitude, price=item.price,
-                               client_lat=item.my_location.latitude, distance=item.distance, duration=item.duration,
-                               id_tariff=item.idTariff)
-    for each in item.addresses:
-        await DataOrderAddresses.create(id_order=order.id, from_address=each.from_address.address,
-                                        to_address=each.to_address.address,
-                                        from_lat=each.from_address.location.latitude,
-                                        from_lon=each.from_address.location.longitude,
-                                        to_lat=each.to_address.location.latitude,
-                                        to_lon=each.to_address.location.longitude)
+
+    all_addresses = []
+
+    total_price: float = 0.0
+    total_distance: float = 0.0
+    total_duration: float = 0.0
+
+    tariff_amount_dict: dict = (
+        await DataCarTariff.filter(id=item.idTariff).first().values("amount")
+    )
+
+    if not tariff_amount_dict:
+        return JSONResponse({"status": False, "message": "Tariff not found!"}, 404)
+
+    tariff_amount: int = tariff_amount_dict["amount"]
+
+    for index, address in enumerate(item.addresses):
+        from_lat, from_lon = (
+            address.from_address.location.latitude,
+            address.from_address.location.longitude,
+        )
+        to_lat, to_lon = (
+            address.to_address.location.latitude,
+            address.to_address.location.longitude,
+        )
+        if (
+            address.from_address.location.longitude == 0
+            and address.from_address.location.latitude == 0
+        ):
+            from_lat, from_lon = await get_lat_lon(address.from_address.address)
+        if (
+            address.to_address.location.longitude == 0
+            and address.to_address.location.latitude == 0
+        ):
+            to_lat, to_lon = await get_lat_lon(address.to_address.address)
+
+        distance, duration = await get_distance_and_duration(
+            from_address={"lat": from_lat, "lng": from_lon},
+            to_address={"lat": to_lat, "lng": to_lon},
+        )
+
+        total_price += get_total_cost_of_the_trip(
+            M=tariff_amount, S2=distance, To=duration
+        )
+
+        total_distance += distance
+        total_duration += duration
+
+        all_addresses.append(
+            {
+                "from_address": address.from_address.address,
+                "to_address": address.to_address.address,
+                "from_lat": from_lat,
+                "from_lon": from_lon,
+                "to_lat": to_lat,
+                "to_lon": to_lon,
+            }
+        )
+
+        # Устанавливаем isFinish в True, если это последний адрес в списке
+        is_finish = index == len(item.addresses) - 1
+
+        await DataOrderAddresses.create(
+            id_order=order.id,
+            from_address=address.from_address.address,
+            to_address=address.to_address.address,
+            from_lat=from_lat,
+            from_lon=from_lon,
+            to_lat=to_lat,
+            to_lon=to_lon,
+            isFinish=is_finish,
+        )
+
+    await DataOrderInfo.create(
+        id_order=order.id,
+        client_lon=item.my_location.longitude,
+        client_lat=item.my_location.latitude,
+        id_tariff=item.idTariff,
+        distance=total_distance,
+        duration=total_duration,
+        price=round(total_price, 2),
+    )
+
     if item.other_parametrs is not None and len(item.other_parametrs) > 0:
         for each in item.other_parametrs:
-            pass
+            await DataOrderOtherParametrs.create(
+                id_order=order.id, id_other_parametr=each.parametr, amount=each.count
+            )
     token = str(uuid.uuid4()) + str(uuid.uuid4())
-    while await UsersUserOrder.filter(token=token, isActive=True).count() > 1:
+    while (
+        await UsersUserOrder.filter(token=token, isActive=True).count() > 1
+    ):  # TODO: Почему не '>='?
         token = str(uuid.uuid4()) + str(uuid.uuid4())
     await UsersUserOrder.create(id_user=request.user, token=token, id_order=order.id)
     await send_order_to_driver(order.id)
     await DataOrder.filter(id=order.id).update(id_status=4)
-    return JSONResponse({"status": True,
-                         "message": "Success!",
-                         "token": token,
-                         "id_order": order.id,
-                         "time": str(time.time())})
+    return JSONResponse(
+        {
+            "status": True,
+            "message": "Success!",
+            "token": token,
+            "id_order": order.id,
+            "time": str(time.time()),
+            "addresses": all_addresses,
+            "total_price": round(total_price, 2),
+            "total_distance_meters": total_distance,
+            "total_duration_seconds_estimated": total_duration,
+        }
+    )
 
 
 async def update_order_status(id_order: int):

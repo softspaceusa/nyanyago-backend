@@ -271,6 +271,26 @@ class DataScheduleOtherParametrs(Model):
         return self.id
 
 
+class DataOrderOtherParametrs(Model):
+    """
+    Таблица для хранения дополнительных параметров заказов (доп. услуги).
+    Ссылается на DataOrder и DataOtherParametrs.
+    """
+    id = fields.BigIntField(pk=True)
+    id_order = fields.BigIntField(null=False)
+    id_other_parametr = fields.BigIntField(null=False)
+    amount = fields.BigIntField()
+    isActive = fields.BooleanField(default=True)
+    datetime_create = fields.DatetimeField(null=True)
+
+    class Meta:
+        schema = "data"
+        table = "order_other_parametrs"
+
+    def __str__(self):
+        return str(self.id)
+
+
 class DataScheduleRoadDriver(Model):
     """
     Используется для связи графиков и маршрутов графиков с водителем.

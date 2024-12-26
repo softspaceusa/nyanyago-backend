@@ -30,7 +30,11 @@ get_onetime_prices = JSONResponse({"status": False,
 start_onetime_drive = JSONResponse({"status": False,
                                     "message": "Success",
                                     "token": "string",
-                                    "time": "string"
+                                    "time": "string",
+                                    "addresses": ["dict"],
+                                    "total_price": 0.0,
+                                    "total_distance_meters": 0.0,
+                                    "total_duration_seconds_estimated": 0.0
                                     })
 get_orders = JSONResponse({"status": True,
                            "message": "Success",
@@ -413,11 +417,7 @@ class OtherParams(BaseModel):
 class CurrentDrive(BaseModel):
     my_location: NowLocation
     addresses: List[DriveAddresses]
-    price: int
-    distance: int
-    duration: int
     description: str
-    typeDrive: int
     idTariff: int
     other_parametrs: Union[List[OtherParams], None] = []
 
