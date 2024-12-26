@@ -107,6 +107,7 @@ class DataDriverMode(Model):
     longitude = fields.FloatField()
     websocket_token = fields.TextField()
     datetime_create = fields.DatetimeField(null=True)
+    isActive = fields.BooleanField(default=False)
 
 
     class Meta:

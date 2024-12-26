@@ -108,7 +108,7 @@ async def get_driver_referals(request: Request, item: GetDriverReferals):
 async def start_driver_mode(request: Request, item: NowLocation):
     await DataDriverMode.filter(id_driver=request.user).delete()
     data = await DataDriverMode.create(id_driver=request.user, latitude=item.latitude, longitude=item.longitude,
-                                       websocket_token=str(uuid.uuid4())+str(uuid.uuid4())+str(uuid.uuid4()))
+                                       websocket_token=str(uuid.uuid4())+str(uuid.uuid4())+str(uuid.uuid4()), isActive=True)
     return JSONResponse({"status": True,
                          "message": "Success!",
                          "driver-token": data.websocket_token})
