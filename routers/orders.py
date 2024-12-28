@@ -1114,6 +1114,19 @@ async def get_current_order_data(request: Request):
         user_photo = await UsersUserPhoto.filter(id_user=current_order.id_user).first()
         order_info = await DataOrderInfo.filter(id_order=current_order.id).first()
         order_addresses = await DataOrderAddresses.filter(id_order=current_order.id).all()
+        other_params = []
+        order_other_params = await DataOrderOtherParametrs.filter(id_order=current_order.id).all()
+        for other_param in order_other_params:
+            if other_param.isActive:
+                name_dict = await DataOtherDriveParametr.filter(id=other_param.id_other_parametr).first().values("title", "amount")
+                if name_dict:
+                    name = name_dict["title"]
+                    value = float(name_dict["amount"])
+                    other_params.append({
+                        "id": other_param.id_other_parametr,
+                        "name": name,
+                        "value": float(other_param.amount * value)
+                    })
 
         if not order_info or not order_addresses:
             continue
@@ -1126,6 +1139,8 @@ async def get_current_order_data(request: Request):
             "user_photo": user_photo.photo_path if user_photo else None,
             "amount": float(order_info.price),
             "id_status": current_order.id_status,
+            "type_drive": current_order.type_drive,
+            "other_params": other_params,
             "addresses": [{
                 "from": addr.from_address,
                 "isFinish": addr.isFinish,

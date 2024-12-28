@@ -31,7 +31,7 @@ class DataOrder(Model):
     id_type_order = fields.BigIntField(null=False)
     isActive = fields.BooleanField(default=True)
     datetime_create = fields.DatetimeField(null=True)
-
+    type_drive = fields.TextField(default="0")  # Тип поездки: в одну сторону, туда-обратно, с промежуточными точками (0, 1, 2)
 
     class Meta:
         schema = "data"
