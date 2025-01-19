@@ -402,66 +402,191 @@ async def get_schedule(request: Request, id: int):
                          "schedule": schedule}, 200)
 
 
-@router.get("/schedules",
-             responses=generate_responses([get_schedules,
-                                           schedule_not_found,
-                                           access_forbidden]))
+@router.get(
+    "/schedules",
+    responses=generate_responses([get_schedules, schedule_not_found, access_forbidden]),
+)
 async def get_schedule(request: Request):
-    schedules = await DataSchedule.filter(id_user=request.user, isActive__in=[True, False]
-                                         ).all().values("id", "title", "description", "children_count",
-                                                        "id_tariff", "week_days", "duration", "id_user", "isActive", "datetime_create")
+    """
+    Возвращает все графики/расписания текущего пользователя.
+
+    Args:
+        request (Request): Объект запроса
+
+    Returns:
+        JSONResponse: Ответ в формате JSON
+
+    Example:
+
+        Пример успешного ответа:
+
+            {
+              "status": true,
+              "message": "Success!",
+              "schedules": [
+                {
+                  "id": 34,
+                  "title": "По кайфу",
+                  "description": "",
+                  "children_count": 1,
+                  "id_tariff": 2,
+                  "week_days": [
+                    0,
+                    2,
+                    3,
+                    5
+                  ],
+                  "duration": 365,
+                  "id_user": 21,
+                  "isActive": true,
+                  "datetime_create": "2025-01-17 16:26:09.763770+00:00",
+                  "other_parametrs": [
+                    {
+                      "parametr": 1,
+                      "count": 1
+                    },
+                    {
+                      "parametr": 2,
+                      "count": 1
+                    }
+                  ],
+                  "roads": [
+                    {
+                      "id": 82,
+                      "week_day": 5,
+                      "title": "паывпы",
+                      "start_time": "09:45",
+                      "end_time": "12:45",
+                      "type_drive": [
+                        0
+                      ],
+                      "amount": 56802.81,
+                      "addresses": [
+                        {
+                          "from_address": {
+                            "address": "Москва, Россия",
+                            "location": {
+                              "longitude": 37.6172981262207,
+                              "latitude": 55.75582504272461
+                            }
+                          },
+                          "to_address": {
+                            "address": "Санкт-Петербург, Россия",
+                            "location": {
+                              "longitude": 30.360910415649414,
+                              "latitude": 59.93105697631836
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  ],
+                  "amount": 56802.81
+                },
+    """
+    schedules = (
+        await DataSchedule.filter(id_user=request.user, isActive__in=[True, False])
+        .all()
+        .values(
+            "id",
+            "title",
+            "description",
+            "children_count",
+            "id_tariff",
+            "week_days",
+            "duration",
+            "id_user",
+            "isActive",
+            "datetime_create",
+        )
+    )
     for schedule in schedules:
-        schedule["week_days"] = [int(x) for x in schedule["week_days"].split(";")]
-        schedule["datetime_create"] = str(schedule["datetime_create"])
-        other_parametrs = await DataScheduleOtherParametrs.filter(id_schedule=schedule["id"],
-                                                                  isActive=True).order_by("id").all().values()
+        week_days_raw = schedule.get("week_days", "")
+        if week_days_raw:
+            schedule["week_days"] = [
+                int(x) for x in week_days_raw.split(";") if x.isdigit()
+            ]
+        else:
+            schedule["week_days"] = []
+
+        schedule["datetime_create"] = (
+            str(schedule["datetime_create"]) if schedule["datetime_create"] else None
+        )
+
+        other_parametrs = (
+            await DataScheduleOtherParametrs.filter(
+                id_schedule=schedule["id"], isActive=True
+            )
+            .order_by("id")
+            .all()
+            .values()
+        )
+
         other_parametrs_data = []
         for parametr in other_parametrs:
-            other_parametrs_data.append({
-                "parametr": parametr["id_other_parametr"],
-                "count": parametr["amount"]
-            })
+            other_parametrs_data.append(
+                {"parametr": parametr["id_other_parametr"], "count": parametr["amount"]}
+            )
         schedule["other_parametrs"] = other_parametrs_data
-        tariff = (await DataCarTariff.filter(id=schedule["id_tariff"]).first().values())["amount"]
+
         all_price = 0
-        roads = await DataScheduleRoad.filter(id_schedule=schedule["id"], isActive=True).order_by("id").all().values()
+        roads = (
+            await DataScheduleRoad.filter(id_schedule=schedule["id"], isActive=True)
+            .order_by("id")
+            .all()
+            .values()
+        )
+
         for road in roads:
-            road["type_drive"] = [int(x) for x in road["type_drive"].split(";")]
-            addresses = await DataScheduleRoadAddress.filter(id_schedule_road=road["id"]).order_by("id").all().values()
-            price_road = 0
+            type_drive_raw = road.get("type_drive", "")
+            if type_drive_raw:
+                road["type_drive"] = [
+                    int(x) for x in type_drive_raw.split(";") if x.isdigit()
+                ]
+            else:
+                road["type_drive"] = []
+
+            addresses = (
+                await DataScheduleRoadAddress.filter(id_schedule_road=road["id"])
+                .order_by("id")
+                .all()
+                .values()
+            )
+
+            price_road = road.get("amount", -1)
+            all_price += price_road
             data_addresses = []
             for address in addresses:
-                info, _ = await get_time_drive(address["from_lat"], address["from_lon"],
-                                               address["to_lat"], address["to_lon"], tariff)
-                price_road += info
-                all_price += price_road
+                from_lat = address.get("from_lat")
+                from_lon = address.get("from_lon")
+                to_lat = address.get("to_lat")
+                to_lon = address.get("to_lon")
+
                 address_data = {
-                                    "from_address": {
-                                        "address": address["from_address"],
-                                        "location": {
-                                            "longitude": address["from_lon"],
-                                            "latitude": address["from_lat"]
-                                        }
-                                    },
-                                    "to_address": {
-                                        "address": address["to_address"],
-                                        "location": {
-                                            "longitude": address["to_lon"],
-                                            "latitude": address["to_lat"]
-                                        }
-                                    }
+                    "from_address": {
+                        "address": address["from_address"],
+                        "location": {"longitude": from_lon, "latitude": from_lat},
+                    },
+                    "to_address": {
+                        "address": address["to_address"],
+                        "location": {"longitude": to_lon, "latitude": to_lat},
+                    },
                 }
                 data_addresses.append(address_data)
-            road["amount"] = price_road
+
+            road["amount"] = round(float(price_road), 2)
             road["addresses"] = data_addresses
-            del road["id_schedule"]
-            del road["isActive"]
-            del road["datetime_create"]
+
+            road.pop("id_schedule", None)
+            road.pop("isActive", None)
+            road.pop("datetime_create", None)
+
         schedule["roads"] = roads
-        schedule["amount"] = all_price
-    return JSONResponse({"status": True,
-                         "message": "Success!",
-                         "schedules": schedules}, 200)
+        schedule["amount"] = round(float(all_price), 2)
+
+    return JSONResponse(
+        {"status": True, "message": "Success!", "schedules": schedules}, 200
+    )
 
 
 @router.delete(
