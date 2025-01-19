@@ -482,8 +482,11 @@ async def get_schedule(request: Request):
                     }
                   ],
                   "amount": 56802.81
-                },
+                }
+              ]
+            }
     """
+
     schedules = (
         await DataSchedule.filter(id_user=request.user, isActive__in=[True, False])
         .all()
