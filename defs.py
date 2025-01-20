@@ -15,6 +15,7 @@ import traceback
 
 from models.orders_db import DataScheduleRoadDriver, DataOrderInfo, DataOrderAddresses, DataOrder
 from models.users_db import UsersUser, UsersUserPhoto
+from sevice.google_maps_api import get_distance_and_duration
 
 
 async def error(err):
@@ -391,8 +392,8 @@ async def get_order_data_for_socket(order_id):
             answer["addresses"] = []
             for each in addresses:
                 # Получаем время в пути
-                _, duration = await get_time_drive(each["from_lat"], each["from_lon"],
-                                                   each["to_lat"], each["to_lon"], 0)
+                _, duration = await get_distance_and_duration({"lat": each["from_lat"], "lng": each["from_lon"]},
+                                                              {"lat": each["to_lat"], "lng": each["to_lon"]})
                 address_data = {
                     "from": each["from_address"],
                     "isFinish": each["isFinish"],
@@ -401,7 +402,7 @@ async def get_order_data_for_socket(order_id):
                     "from_lon": each["from_lon"],
                     "to_lat": each["to_lat"],
                     "to_lon": each["to_lon"],
-                    "duration": duration
+                    "duration_seconds": duration
                 }
                 answer["addresses"].append(address_data)
 

@@ -213,7 +213,12 @@ async def websocket_endpoint(websocket: WebSocket, token: str):
 
         # Получаем данные о местоположении водителя
         driver_mode = await DataDriverMode.filter(websocket_token=token).first()
-        if not driver_mode or not is_valid_coordinate(driver_mode.latitude, driver_mode.longitude):
+        if not driver_mode:
+            logger.info(f"No driver (driver_mode) found for token: {token}")
+            return
+
+        if not is_valid_coordinate(driver_mode.latitude, driver_mode.longitude):
+            logger.info(f"Invalid driver location for token: {token}")
             return
 
         # Обрабатываем активные заказы до цикла while
@@ -313,6 +318,7 @@ async def websocket_endpoint(websocket: WebSocket, token: str):
     except Exception as e:
         await error(traceback.format_exc())
     finally:
+        logger.info(f"Disconnecting driver with token: {token}")
         await manager_driver.disconnect(token)
 
 
@@ -389,6 +395,7 @@ class ConnectionManagerClient:
                     drivers = []
                     for driver_token in manager_driver.active_connections:
                         driver_data = await self.get_driver_data(driver_token)
+                        logger.info(f"driver_data: {driver_data}")
                         if driver_data and is_valid_coordinate(driver_data["latitude"], driver_data["longitude"]):
                             distance = calculate_distance(driver_data["latitude"], driver_data["longitude"],
                                                           order_info.client_lat, order_info.client_lon)
@@ -608,6 +615,8 @@ async def accept_order(request: Request, id_order: int):
     if driver_geo:
         _, duration = await get_time_drive(driver_geo.latitude, driver_geo.longitude, answer["addresses"][0]["from_lat"],
                                      answer["addresses"][0]["from_lon"], 0)
+        # _, duration = await get_distance_and_duration({"lat": driver_geo.latitude, "lon": driver_geo.longitude}, {"lat": answer["addresses"][0]["from_lat"],
+        #                              "lon": answer["addresses"][0]["from_lon"]})
         fbid = await UsersBearerToken.filter(id_user=order.id_user).first().values("fbid")
 
         if fbid:

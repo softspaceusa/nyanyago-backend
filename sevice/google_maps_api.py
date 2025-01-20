@@ -9,7 +9,7 @@ gmaps = googlemaps.Client(key=API_KEY)
 
 async def get_lat_lon(
     address: str,
-) -> tuple:  # TODO: `get_lat_lon` мб надо сделать асинхронной
+) -> tuple:
     """
     Определяет координаты по адресу
 
@@ -29,7 +29,7 @@ async def get_lat_lon(
 
 async def get_distance_and_duration(
     from_address: Union[str, dict], to_address: Union[str, dict]
-) -> tuple:  # TODO: `get_distance_and_duration` мб надо сделать асинхронной
+) -> tuple:
     """
     Получает расстояние и время в пути между двумя точками
     Если задавать адреса в виде координат, то вот пример: {"lat": 55.93, "lng": -3.118}.
