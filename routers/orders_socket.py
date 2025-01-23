@@ -207,6 +207,7 @@ async def websocket_endpoint(websocket: WebSocket, token: str):
         11: [15],
         15: [14],
     }
+    logger.info(f"Process (/current-drive-mode/{token}) request")
     try:
         await manager_driver.connect(websocket, token)
         users[token] = websocket
@@ -362,6 +363,7 @@ class ConnectionManagerClient:
 
     async def connect(self, websocket: WebSocket, token: str):
         await websocket.accept()
+        logger.info(f"Connected {token}")
         self.active_connections[token] = websocket
         await self.send_drivers_to_client()
 
@@ -877,3 +879,34 @@ async def update_order_status_route(request: Request, id_order: int):
     except Exception as e:
         logger.error(f"Error updating order status: {str(e)}")
         return JSONResponse({"status": False, "message": "Internal server error"}, status_code=500)
+
+
+@router.websocket("/ping")
+async def ping_endpoint(websocket: WebSocket):
+    """
+    Тестовый вебсокет для проверки подключения. Отправляет "pong" в ответ на "ping".
+    """
+    logger.info("New connection to /ping")
+    try:
+        # Подключаемся к вебсокету
+        await websocket.accept()
+
+        while True:
+            # Ожидаем сообщение от клиента
+            message = await websocket.receive_text()
+
+            if message.lower() == "ping":
+                response = "pong"
+            else:
+                response = f"Unknown message: {message}"
+
+            logger.info(f"Received: {message}, Responding: {response}")
+            # Отправляем ответ клиенту
+            await websocket.send_text(response)
+
+    except Exception as e:
+        logger.error(f"Error in /ping websocket: {str(e)}")
+    finally:
+        logger.info("Connection to /ping closed")
+
+    await websocket.close()
