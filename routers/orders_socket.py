@@ -30,6 +30,103 @@ router = APIRouter()
 users = {}
 clients = {}
 
+"""
+ПО СОСТОЯНИЮ НА 24.01.2025
+
+Статусы заказа:
+1	Создан
+2	Отменён водителем
+3	Отменён пользователем
+4	Поиск водителя
+5	Водитель в пути
+6	Ожидание
+7	На месте
+8	Авария
+9	Чрезвычайная ситуация
+10	Ребёнку плохо
+11	Завершён
+12	В промежуточной точке
+13	Водитель найден
+14	Водитель начал поездку
+15	Водитель прибыл на конечную точку заказа
+
+
+send_order_to_driver(id_order) - отправляет заказ всем активным водителям в радиусе 3км
+
+process_active_orders(driver_mode, websocket) - отправляет все активные заказы 
+в радиусе 3км водителю в сокет
+
+update_order_status(id_order) - обновляет статус заказа и делает его неактивным
+
+send_message_to_driver(id_order, message_data) - отправляет сообщение 
+водителю данного заказа
+
+send_message_to_client(id_order, status) - отправляет сообщение со статусом 
+заказа клиента клиенту в сокет.
+
+calculate_distance(lat1, lon1, lat2, lon2) - высчитывает расстояние между 
+точками по прямой
+
+is_valid_coordinate(lat, lon) - проверяет валидность координат
+
+
+
+НЕ ИСПОЛЬЗУЕТСЯ ---------------------------------------------------------
+
+check_and_update_status_auto (driver_mode, websocket, current_order) - проверяет и 
+обновляет статус (из "водитель начал поездку [14]" в "водитель прибыл на 
+конечную точку заказа [15]" автоматически при обновлении координат водителя 
+(до финиша <50м). Проверка была отключена так как выполняется на фронте.
+
+send_active_orders_to_driver(websocket)
+---------------------------------------------------------------------------------------
+
+
+
+Менеджеры подключений к вебсокетам-------------------------------
+
+ConnectionManager (водительский сокет)
+
+--connect(self, websocket: WebSocket, token: str) - подключает к сокету, 
+сохраняет подключение у словаре активных подключений и оповещает 
+(вызывает `notify_clients_about_driver`) всех активных клиентов в радиусе 3км от водителя.
+
+--disconnect(self, token) - отключает от сокета и удаляет подключение из 
+словаря активных подключений.
+
+--send_personal_message(self, message: str, websocket: WebSocket) - отправляет 
+сообщение в сокет.
+
+--notify_clients_about_driver(self, driver_token) - оповещает всех активных клиентов 
+в радиусе 3км от водителя.
+
+--notify_clients_about_driver_disconnect(self, driver_token) - оповещает ВООБЩЕ ВСЕХ 
+активных клиентов об отключении водителя.
+
+--get_driver_data(self, token) - возвращает инфу о водителе (id, lat, lon).
+
+
+
+ConnectionManagerClient (клиентский сокет)
+
+--connect(self, websocket: WebSocket, token: str) - подключает к сокету, сохраняет 
+подключение у словаре активных подключений, отправляет 
+(вызывает `send_drivers_to_client()`) всех активных водителей в радиусе 3км в сокет, 
+сохраняет заказ пользователя в словаре заказов и возвращает его id в сокет.
+
+--disconnect(self, token) - отключает от сокета и удаляет подключение из словаря 
+активных подключений.
+
+--send_personal_message(self, message: str, websocket: WebSocket) - отправляет 
+сообщение в сокет.
+
+--send_drivers_to_client(self, token) - отправляет всех активных водителей в 
+радиусе 3км в сокет.
+
+--get_driver_data(self, token) - возвращает инфу о водителе (id, lat, lon).
+"""
+
+
 
 def generate_responses(answers: list):
     answer = {}
@@ -64,6 +161,7 @@ class ConnectionManager:
         await self.notify_clients_about_driver(token)
 
         # Отправляем водителю все активные заявки клиентов
+        # TODO: Deprecated. Условие никогда не выполняется. См. `process_active_orders()`
         if token in self.active_orders:
             order = self.active_orders[token]
             message = json.dumps(order, ensure_ascii=False)
@@ -142,6 +240,7 @@ async def send_active_orders_to_driver(websocket: WebSocket):
     """
     Отправляет водителю все активные заявки клиентов, которые подключены к клиентским сокетам
     """
+    # TODO: Deprecated. Функция не используется. См. `process_active_orders()`
     try:
         # Получаем всех клиентов, подключенных к сокетам
         for token, client_socket in clients.items():
@@ -365,7 +464,7 @@ class ConnectionManagerClient:
         await websocket.accept()
         logger.info(f"Connected {token}")
         self.active_connections[token] = websocket
-        await self.send_drivers_to_client()
+        await self.send_drivers_to_client(token)
 
         user_order = await UsersUserOrder.filter(token=token, isActive=True).first()
         if user_order:
@@ -378,6 +477,7 @@ class ConnectionManagerClient:
         if websocket:
             await websocket.close()
             try:
+                # TODO: Deprecated. Таблица больше не используется
                 await WaitDataSearchDriver.filter(token=token).delete()
             except Exception as e:
                 logger.info(f"Error during disconnect: {str(e)}")
@@ -388,24 +488,32 @@ class ConnectionManagerClient:
         except Exception as e:
             logger.info(f"Error sending message: {str(e)}")
 
-    async def send_drivers_to_client(self):
-        for token, client_socket in self.active_connections.items():
-            user_order = await UsersUserOrder.filter(token=token, isActive=True).first()
-            if user_order:
-                order_info = await DataOrderInfo.filter(id_order=user_order.id_order).first()
-                if order_info and is_valid_coordinate(order_info.client_lat, order_info.client_lon):
-                    drivers = []
-                    for driver_token in manager_driver.active_connections:
-                        driver_data = await self.get_driver_data(driver_token)
-                        logger.info(f"driver_data: {driver_data}")
-                        if driver_data and is_valid_coordinate(driver_data["latitude"], driver_data["longitude"]):
-                            distance = calculate_distance(driver_data["latitude"], driver_data["longitude"],
-                                                          order_info.client_lat, order_info.client_lon)
-                            if distance <= 3:
-                                drivers.append(driver_data)
+    async def send_drivers_to_client(self, token: str):
+        client_socket = self.active_connections.get(token)
+        if not client_socket:
+            return
 
-                    message = json.dumps({"type": "drivers_update", "drivers": drivers}, ensure_ascii=False)
-                    await self.send_personal_message(message, client_socket)
+        user_order = await UsersUserOrder.filter(token=token, isActive=True).first()
+        if user_order:
+            order_info = await DataOrderInfo.filter(
+                id_order=user_order.id_order).first()
+            if order_info and is_valid_coordinate(order_info.client_lat,
+                                                  order_info.client_lon):
+                drivers = []
+                for driver_token in manager_driver.active_connections:
+                    driver_data = await self.get_driver_data(driver_token)
+                    if driver_data and is_valid_coordinate(driver_data["latitude"],
+                                                           driver_data["longitude"]):
+                        distance = calculate_distance(
+                            driver_data["latitude"], driver_data["longitude"],
+                            order_info.client_lat, order_info.client_lon
+                        )
+                        if distance <= 3:
+                            drivers.append(driver_data)
+
+                message = json.dumps({"type": "drivers_update", "drivers": drivers},
+                                     ensure_ascii=False)
+                await self.send_personal_message(message, client_socket)
 
     async def get_driver_data(self, token: str):
         try:
@@ -466,6 +574,7 @@ async def websocket_endpoint_client(websocket: WebSocket, token: str):
 
                 if message_data.get("status") == "exit":
                     await send_message_to_driver(user_order.id_order, message_data)
+                    await update_order_status(user_order.id_order)
                 if message_data.get("status") == 3:
                     await send_message_to_driver(user_order.id_order, message_data)
                     await update_order_status(user_order.id_order)
@@ -517,7 +626,6 @@ async def send_message_to_driver(id_order, message_data):
                 driver_socket = manager_driver.active_connections[driver_mode.websocket_token]
                 message = json.dumps(message_data)
                 await manager_driver.send_personal_message(message, driver_socket)
-                await DataOrder.filter(id=id_order).update(id_status=3, isActive=False)
     except Exception as e:
         await error(traceback.format_exc())
 
