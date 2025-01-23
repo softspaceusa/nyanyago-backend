@@ -1708,13 +1708,16 @@ async def get_client_token(request: Request):
     try:
         user_orders = await UsersUserOrder.filter(id_user=request.user).all()
         if not user_orders:
-            raise HTTPException(status_code=404, detail="Driver token not found")
+            raise HTTPException(status_code=404, detail="Client tokens not found")
 
-        result = {}
+        result = []
         for user_order in user_orders:
-            result["websocket_token"] = user_order.token
-            result["id_order"] = user_order.id_order
-        return JSONResponse(result)
+            result.append({
+                "websocket_token": user_order.token,
+                "id_order": user_order.id_order
+            })
+
+        return JSONResponse({"orders": result})
 
     except DoesNotExist:
         raise HTTPException(status_code=404, detail="Client not found")
