@@ -371,7 +371,7 @@ async def get_order_data_for_socket(order_id):
             return None
 
         amount = order_info.get("price", 0)
-        id_status = order_info.get("id_status", "unknown")
+        id_status = order.get("id_status", 0)
 
         # Формируем ответ
         answer = {

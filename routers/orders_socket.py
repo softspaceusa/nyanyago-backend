@@ -212,6 +212,7 @@ class ConnectionManager:
                         logger.info(f"Водитель {driver_data['id_driver']} исключен из-за расстояния ({distance:.2f} км)")
 
     async def notify_clients_about_driver_disconnect(self, driver_token: str):
+        # TODO: Пока не используется
         message = json.dumps({"type": "driver_disconnect", "driver_token": driver_token}, ensure_ascii=False)
         for client_socket in manager_client.active_connections.values():
             await manager_client.send_personal_message(message, client_socket)
@@ -573,6 +574,7 @@ async def websocket_endpoint_client(websocket: WebSocket, token: str):
                     continue
 
                 if message_data.get("status") == "exit":
+                    # TODO: Что это? Вроде не используется
                     await send_message_to_driver(user_order.id_order, message_data)
                     await update_order_status(user_order.id_order)
                 if message_data.get("status") == 3:
@@ -631,6 +633,7 @@ async def send_message_to_driver(id_order, message_data):
 
 
 async def send_order_to_driver(id_order: int):
+    """отправляет заказ всем активным водителям в радиусе 3км"""
     try:
         order = await DataOrder.filter(id=id_order, isActive=True).first()
         if not order:
@@ -660,7 +663,7 @@ async def accept_order(request: Request, id_order: int):
     """
     Роут для принятия заявки водителем. Принимает id_order и текущего пользователя.
     """
-    result = {"status": True, "message": [], "order_data": None}
+    result = {"status": True, "message": [], "order_data": None, "id_chat": None}
 
     is_driver = await UsersUserAccount.filter(id_user=request.user, id_type_account=2).exists()
     if not is_driver:
@@ -718,7 +721,7 @@ async def accept_order(request: Request, id_order: int):
         result["message"].append("An active chat has been found.")
         chat_id = chat.id_chat
 
-    answer["id_chat"] = chat_id
+    result["id_chat"] = chat_id
 
     # Геоданные водителя и расчет времени прибытия
     driver_geo = await DataDriverMode.filter(id_driver=request.user).order_by("-id").first()
@@ -746,6 +749,7 @@ async def accept_order(request: Request, id_order: int):
                                            forbidden,
                                            success_answer]))
 async def decline_order(request: Request, id_order: int):
+    # TODO: Можно и без него, но он не мешает (если отменять тут - то ещё и чат удалится)
     if await UsersUserAccount.filter(id_user=request.user, id_type_account=2).count() == 0:
         return forbidden
     if await DataOrder.filter(id=id_order, id_driver=request.user, isActive=True).count() == 0:
@@ -973,6 +977,7 @@ async def update_order_status(id_order: int):
 @router.post("/cancel_order")
 async def update_order_status_route(request: Request, id_order: int):
     """Роут для обновления статуса заказа"""
+    # TODO: Можно и без него, но он не мешает
     try:
         order = await DataOrder.filter(id=id_order).first()
         if not order:
