@@ -119,10 +119,10 @@ async def start_driver_mode(request: Request, item: NowLocation):
             dependencies=[Depends(has_access_driver)],
             responses=generate_responses([get_current_order]))
 async def get_current_order(request: Request):
-    data = await DataOrder.filter(id_driver=request.user, isActive=True).all().values("id_order")
+    data = await DataOrder.filter(id_driver=request.user, isActive=True).all().values("id")
     orders = []
     for order in data:
-        orders.append(order["id_order"])
+        orders.append(order["id"])
     return JSONResponse({"status": True,
                          "message": "Success!",
                          "orders": orders})
