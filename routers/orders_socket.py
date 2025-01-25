@@ -8,7 +8,7 @@ from starlette.websockets import WebSocketDisconnect
 import logging
 
 from const.cost_formulas import get_total_cost_of_the_trip
-from const.dependency import has_access
+from const.dependency import has_access, has_access_driver
 from models.authentication_db import UsersUserAccount, UsersBearerToken
 from models.chats_db import ChatsChatParticipant, ChatsChat
 from models.drivers_db import DataDriverMode
@@ -658,7 +658,8 @@ async def send_order_to_driver(id_order: int):
         await error(traceback.format_exc())
 
 
-@router.post("/accept_order", responses=generate_responses([forbidden, you_have_active_drive]))
+@router.post("/accept_order", responses=generate_responses([forbidden, you_have_active_drive]),
+             dependencies=[Depends(has_access_driver)])
 async def accept_order(request: Request, id_order: int):
     """
     Роут для принятия заявки водителем. Принимает id_order и текущего пользователя.
@@ -747,7 +748,8 @@ async def accept_order(request: Request, id_order: int):
 @router.post("/decline_order",
              responses=generate_responses([cant_decline_in_drive_mode,
                                            forbidden,
-                                           success_answer]))
+                                           success_answer]),
+             dependencies=[Depends(has_access_driver)])
 async def decline_order(request: Request, id_order: int):
     # TODO: Можно и без него, но он не мешает (если отменять тут - то ещё и чат удалится)
     if await UsersUserAccount.filter(id_user=request.user, id_type_account=2).count() == 0:
@@ -769,7 +771,8 @@ async def decline_order(request: Request, id_order: int):
 
 
 @router.post(
-    "/start_onetime_drive", responses=generate_responses([start_onetime_drive])
+    "/start_onetime_drive", responses=generate_responses([start_onetime_drive]),
+    dependencies=[Depends(has_access)]
 )
 async def start_onetime_drive(request: Request, item: CurrentDrive):
     """
@@ -973,7 +976,8 @@ async def update_order_status(id_order: int):
     logger.info(f"Order {id_order} updated: status=3, isActive=False")
 
 
-@router.post("/cancel_order")
+@router.post("/cancel_order",
+             dependencies=[Depends(has_access)])
 async def update_order_status_route(request: Request, id_order: int):
     """Роут для обновления статуса заказа"""
     # TODO: Можно и без него, но он не мешает
