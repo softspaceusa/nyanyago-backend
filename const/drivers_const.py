@@ -41,6 +41,10 @@ start_current_drive_mode = JSONResponse({"status": True,
                                          "message": "Success!",
                                          "driver-token": "string"})
 
+get_current_order = JSONResponse({"status": True,
+                                  "message": "Success!",
+                                  "orders": []})
+
 
 class GetDriverReferals(BaseModel):
     limit: Union[int, None] = 10

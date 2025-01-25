@@ -5,8 +5,9 @@ from const.orders_const import get_schedules_responses, schedule_not_found, get_
     get_driver_schedules
 from defs import get_date_from_datetime, sendPush, get_time_drive
 from models.authentication_db import UsersBearerToken
-from models.orders_db import DataSchedule, DataScheduleOtherParametrs, DataScheduleRoad, DataScheduleRoadAddress, \
-    DataScheduleRoadDriver, WaitDataScheduleRoadDriver
+from models.orders_db import DataSchedule, DataScheduleOtherParametrs, DataScheduleRoad, \
+    DataScheduleRoadAddress, \
+    DataScheduleRoadDriver, WaitDataScheduleRoadDriver, DataOrder
 from models.users_db import UsersUser, UsersUserPhoto, UsersReferalUser, DataDebitCard, DataUserBalance, \
     HistoryNotification
 from models.users_db import DataUserBalanceHistory, HistoryRequestPayment
@@ -112,6 +113,19 @@ async def start_driver_mode(request: Request, item: NowLocation):
     return JSONResponse({"status": True,
                          "message": "Success!",
                          "driver-token": data.websocket_token})
+
+
+@router.get("/get_current_order",
+            dependencies=[Depends(has_access_driver)],
+            responses=generate_responses([get_current_order]))
+async def get_current_order(request: Request):
+    data = await DataOrder.filter(id_driver=request.user, isActive=True).all().values("id_order")
+    orders = []
+    for order in data:
+        orders.append(order["id_order"])
+    return JSONResponse({"status": True,
+                         "message": "Success!",
+                         "orders": orders})
 
 
 @router.post("/request-payment",

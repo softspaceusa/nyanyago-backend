@@ -401,7 +401,7 @@ async def websocket_endpoint(websocket: WebSocket, token: str):
                 if current_order.id_status in allowed_statuses:
                     await DataOrder.filter(id=id_order).update(id_status=status)
                     if status == 11:
-                        await DataOrder.filter(id=id_order).update(isActive=False)
+                        await DataOrder.filter(id=id_order).update(isActive=False, id_driver=None)
                     await send_message_to_client(id_order, status)
                     await manager_driver.send_personal_message(json.dumps({"status": status}), websocket)
                 else:
@@ -757,8 +757,7 @@ async def decline_order(request: Request, id_order: int):
     order = await DataOrder.filter(id=id_order, isActive=True, id_status__not=13).first().values()
     if order is None or len(order) == 0:
         return cant_decline_in_drive_mode
-    await DataOrder.filter(id=id_order).update(id_driver=None)
-    await DataOrder.filter(id=id_order).update(id_status=4)
+    await DataOrder.filter(id=id_order).update(id_status=4, id_driver=None)
     await send_order_to_driver(id_order)
     chats = [x["id_chat"] for x in (await ChatsChatParticipant.filter(id_user=order["id_user"]).all().values())]
     chat = await ChatsChatParticipant.filter(id_user=request.user, id_chat__in=chats).first().values()
