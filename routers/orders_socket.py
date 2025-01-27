@@ -693,7 +693,7 @@ async def accept_order(request: Request, id_order: int):
     try:
         # Отправка сообщения клиенту в сокет
         message = {"id_status": 13, "id_driver": request.user}
-        token = await UsersUserOrder.filter(id_user=order.id_user).first().values("token")
+        token = await UsersUserOrder.filter(id_order=id_order).first().values("token")
 
         if token and token["token"] in clients:
             await manager_client.send_personal_message(json.dumps(message), clients[token["token"]])
