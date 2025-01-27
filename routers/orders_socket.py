@@ -649,6 +649,7 @@ async def send_order_to_driver(id_order: int):
     """отправляет заказ всем активным водителям в радиусе 3км"""
     try:
         order = await DataOrder.filter(id=id_order, isActive=True).first()
+        order_dict = await DataOrder.filter(id=id_order, isActive=True).first().values()
         if not order:
             return
         order_info = await DataOrderInfo.filter(id_order=id_order).first()
@@ -664,7 +665,7 @@ async def send_order_to_driver(id_order: int):
                 if distance <= 3:
                     driver_socket = users.get(driver.websocket_token)
                     if driver_socket:
-                        message = json.dumps(await get_order_data(order.id))
+                        message = json.dumps(await get_order_data(order_dict))
                         await manager_driver.send_personal_message(message, driver_socket)
 
     except Exception as e:
