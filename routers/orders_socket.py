@@ -359,6 +359,10 @@ async def websocket_endpoint(websocket: WebSocket, token: str):
             # Обработка статусов водителя
             status = message_data.get("status")
             id_order = message_data.get("id_order")
+            force = message_data.get("force")
+            if isinstance(force, str) and force.lower() == "true":
+                force = True
+
             if not id_order:
                 continue
 
@@ -395,6 +399,11 @@ async def websocket_endpoint(websocket: WebSocket, token: str):
                     "message": "You are not authorized to update this order"
                 }), websocket)
                 continue
+
+            elif status and force:
+                await DataOrder.filter(id=id_order).update(id_status=status)
+                await send_message_to_client(id_order, status)
+                await manager_driver.send_personal_message(json.dumps({"status": status}), websocket)
 
             elif status in status_mapping:
                 allowed_statuses = status_mapping[status]
