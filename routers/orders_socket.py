@@ -402,6 +402,8 @@ async def websocket_endpoint(websocket: WebSocket, token: str):
 
             elif status and force:
                 await DataOrder.filter(id=id_order).update(id_status=status)
+                if status == 11:
+                    await DataOrder.filter(id=id_order).update(isActive=False, id_driver=None)
                 await send_message_to_client(id_order, status)
                 await manager_driver.send_personal_message(json.dumps({"status": status}), websocket)
 
@@ -463,6 +465,8 @@ async def check_and_update_status_auto(driver_mode, websocket, current_order):
                 status_message = json.dumps({"status": 15})
                 await manager_driver.send_personal_message(status_message, websocket)
                 await send_message_to_client(current_order.id, 15)
+
+
 
 
 class ConnectionManagerClient:
