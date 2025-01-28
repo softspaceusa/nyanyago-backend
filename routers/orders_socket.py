@@ -967,7 +967,7 @@ async def start_onetime_drive(request: Request, item: CurrentDrive):
     ):  # TODO: Почему не '>='?
         token = str(uuid.uuid4()) + str(uuid.uuid4())
     await UsersUserOrder.create(id_user=request.user, token=token, id_order=order.id)
-    await send_order_to_driver(order.id)
+    # await send_order_to_driver(order.id)
     await DataOrder.filter(id=order.id).update(id_status=4)
     return JSONResponse(
         {
