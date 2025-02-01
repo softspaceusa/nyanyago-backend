@@ -591,6 +591,7 @@ async def websocket_endpoint_client(websocket: WebSocket, token: str):
                     await send_message_to_driver(user_order.id_order, message_data)
                     await update_order_status(user_order.id_order)
                 if message_data.get("status") == 3:
+                    message_data["id_order"] = user_order.id_order
                     await send_message_to_driver(user_order.id_order, message_data)
                     await update_order_status(user_order.id_order)
                     await websocket.send_text(json.dumps({"message": "Order cancelled"}))
