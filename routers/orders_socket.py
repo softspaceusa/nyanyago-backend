@@ -324,6 +324,12 @@ async def websocket_endpoint(websocket: WebSocket, token: str):
 
         # Обрабатываем активные заказы до цикла while
         await process_active_orders(driver_mode, websocket, token)
+        data = await DataOrder.filter(id_driver=driver_mode.id_driver, isActive=True).all().values("id")
+        orders = []
+        for order in data:
+            orders.append(order["id"])
+        await manager_driver.send_personal_message(json.dumps({
+                             "active_orders": orders}), websocket)
 
         while True:
             try:
