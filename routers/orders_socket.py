@@ -324,12 +324,14 @@ async def websocket_endpoint(websocket: WebSocket, token: str):
 
         # Обрабатываем активные заказы до цикла while
         await process_active_orders(driver_mode, websocket, token)
+
         data = await DataOrder.filter(id_driver=driver_mode.id_driver, isActive=True).all().values("id")
         orders = []
         for order in data:
             orders.append(order["id"])
+        act_ords = [await get_drive_info(order) for order in orders]
         await manager_driver.send_personal_message(json.dumps({
-                             "active_orders": orders}), websocket)
+                             "active_orders": act_ords}), websocket)
 
         while True:
             try:
@@ -582,6 +584,10 @@ async def websocket_endpoint_client(websocket: WebSocket, token: str):
                     if order:
                         message = json.dumps(order, ensure_ascii=False)
                         await manager_driver.send_personal_message(message, driver_socket)
+
+        order_to = await get_drive_info(user_order.id_order)
+        await manager_client.send_personal_message(json.dumps({
+                             "order": order_to}), websocket)
 
         while True:
             try:
@@ -1047,3 +1053,56 @@ async def ping_endpoint(websocket: WebSocket):
         logger.info("Connection to /ping closed")
 
     await websocket.close()
+
+async def get_drive_info(id_order: int):
+    """
+    Получает информацию о поездке по её ID.
+
+    Args:
+        id_order (int): ID поездки.
+
+    Returns:
+        dict: Ответ с данными поездки или сообщение об ошибке.
+    """
+
+    # Получаем заказ
+    order = await DataOrder.filter(id=id_order).first()
+
+    if not order:
+        return {"status": False, "message": "Order not found!"}
+
+    # Получаем адреса поездки
+    addresses = await DataOrderAddresses.filter(id_order=id_order).values(
+        "from_address", "to_address", "from_lat", "from_lon", "to_lat", "to_lon", "isFinish"
+    )
+
+    # Получаем основную информацию о поездке
+    order_info = await DataOrderInfo.filter(id_order=id_order).first()
+
+    if not order_info:
+        return {"message": "Order info not found!"}
+
+    # Получаем дополнительные параметры поездки
+    other_parameters = await DataOrderOtherParametrs.filter(id_order=id_order).values(
+        "id_other_parametr", "amount"
+    )
+
+    # Получаем токен заказа
+    user_order = await UsersUserOrder.filter(id_order=id_order, isActive=True).first()
+
+    return {
+        "status": True,
+        "message": "Success!",
+        "token": user_order.token if user_order else None,
+        "id_status": order.id_status,
+        "id_type_order": order.id_type_order,
+        "type_drive": order.type_drive,
+        "id_user": order.id_user,
+        "id_driver": order.id_driver,
+        "id_order": id_order,
+        "addresses": addresses,
+        "total_price": round(float(order_info.price), 2),
+        "total_distance_meters": order_info.distance,
+        "total_duration_seconds_estimated": order_info.duration,
+        "other_parameters": other_parameters,
+        }
