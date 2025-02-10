@@ -9,6 +9,7 @@ import logging
 
 from const.cost_formulas import get_total_cost_of_the_trip
 from const.dependency import has_access, has_access_driver
+from const.static_data_const import not_user_photo
 from models.authentication_db import UsersUserAccount, UsersBearerToken
 from models.chats_db import ChatsChatParticipant, ChatsChat
 from models.drivers_db import DataDriverMode
@@ -20,6 +21,7 @@ from const.orders_const import start_onetime_drive, CurrentDrive, JSONResponse, 
 from const.users_const import order_not_found, success_answer
 from defs import error, get_time_drive, get_order_data, sendPush, get_order_data_for_socket, get_order_data_socket
 from models.static_data_db import DataCarTariff
+from models.users_db import UsersUser, UsersUserPhoto
 from sevice.google_maps_api import get_lat_lon, get_distance_and_duration
 
 logging.basicConfig(level=logging.INFO)
@@ -32,6 +34,7 @@ clients = {}
 
 """
 ПО СОСТОЯНИЮ НА 24.01.2025
+# TODO: добавить ссылку на диаграмму последовательности
 
 Статусы заказа:
 1	Создан
@@ -751,6 +754,21 @@ async def accept_order(request: Request, id_order: int):
 
     result["id_chat"] = chat_id
 
+    try:
+        # Отправка сообщения клиенту в сокет
+        message = {"id_chat": chat_id}
+        token = await UsersUserOrder.filter(id_order=id_order).first().values("token")
+
+        if token and token["token"] in clients:
+            await manager_client.send_personal_message(json.dumps(message), clients[token["token"]])
+            result["message"].append("The message (chat_id) has been sent to the client.")
+        else:
+            result["status"] = False
+            result["message"].append("The WebSocket connection to the client was not found.")
+    except Exception as e:
+        result["status"] = False
+        result["message"].append(f"Error when sending a message (chat_id) to the client: {str(e)}")
+
     # Геоданные водителя и расчет времени прибытия
     driver_geo = await DataDriverMode.filter(id_driver=request.user).order_by("-id").first()
     if driver_geo:
@@ -1071,6 +1089,21 @@ async def get_drive_info(id_order: int):
     if not order:
         return {"status": False, "message": "Order not found!"}
 
+    user_id = order.id_user
+
+    # Получаем данные о пользователе
+    user = await UsersUser.filter(id=user_id, isActive=True).first().values()
+    if not user:
+        return {"status": False, "message": "User not found!"}
+
+    # Получаем фото пользователя
+    try:
+        user_photo_data = await UsersUserPhoto.filter(id_user=user_id).first().values()
+        user_photo = user_photo_data["photo_path"] if user_photo_data else not_user_photo
+    except Exception as e:
+        print(f"Error fetching user photo: {str(e)}")
+        user_photo = not_user_photo
+
     # Получаем адреса поездки
     addresses = await DataOrderAddresses.filter(id_order=id_order).values(
         "from_address", "to_address", "from_lat", "from_lon", "to_lat", "to_lon", "isFinish"
@@ -1094,6 +1127,9 @@ async def get_drive_info(id_order: int):
         "status": True,
         "message": "Success!",
         "token": user_order.token if user_order else None,
+        "username": user["name"],
+        "phone": user["phone"],
+        "user_photo": user_photo,
         "id_status": order.id_status,
         "id_type_order": order.id_type_order,
         "type_drive": order.type_drive,
