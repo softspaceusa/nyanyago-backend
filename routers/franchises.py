@@ -711,7 +711,7 @@ async def create_response_new_driver(request: Request, item: ResponseNewDriver):
     if item.success in [False, None]:
         await UsersUserAccount.filter(id_user=item.id_driver, id_type_account=2).delete()
         await WaitDataVerifyDriver.filter(id_driver=item.id_driver).delete()
-        data = await UsersDriverData.filter(id_driver=item.id_driver)
+        data = await UsersDriverData.filter(id_driver=item.id_driver).values()
         await UsersDriverCard.filter(id=data["id_driver_card"]).delete()
         await UsersDriverAnswer.filter(id=data["id_driver_answer"]).delete()
         await UsersCar.filter(id=data["id_car"]).delete()

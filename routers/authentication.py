@@ -21,6 +21,8 @@ import json
 
 router = APIRouter()
 
+# TODO: Добавить диаграмму регистрации водителя
+
 
 def generate_responses(answers: list):
     answer = {}
@@ -93,7 +95,7 @@ async def update_token(request: Request):
         [success_answer, uncorrect_phone, user_already_creates]
     ),
 )
-async def registartion_parent(item: VerifyMobilePhone):
+async def get_registration_code(item: VerifyMobilePhone):
     item.phone = await check_correct_phone(item.phone)
     if item.phone is None:
         return uncorrect_phone
@@ -114,7 +116,7 @@ async def registartion_parent(item: VerifyMobilePhone):
     "/check_registration_code",
     responses=generate_responses([uncorrect_phone, uncorrect_code, success_answer]),
 )
-async def registartion_parent(item: VerifyCodeMobilePhone):
+async def check_registration_code(item: VerifyCodeMobilePhone):
     item.phone = await check_correct_phone(item.phone)
     if item.phone is None:
         return uncorrect_phone
@@ -134,7 +136,7 @@ async def registartion_parent(item: VerifyCodeMobilePhone):
         [user_already_creates, uncorrect_phone, success_answer]
     ),
 )
-async def registartion_parent(item: RegistrationParent):
+async def registration_parent(item: RegistrationParent):
     item.phone = await check_correct_phone(item.phone)
     if item.phone is None:
         return uncorrect_phone
