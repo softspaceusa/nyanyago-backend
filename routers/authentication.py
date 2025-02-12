@@ -87,13 +87,16 @@ async def update_token(request: Request):
         raise HTTPException(401, "Unauthorized")
 
 
-@router.post("/get_registration_code",
-             responses=generate_responses([success_answer,
-                                           uncorrect_phone,
-                                           user_already_creates]))
+@router.post(
+    "/get_registration_code",
+    responses=generate_responses(
+        [success_answer, uncorrect_phone, user_already_creates]
+    ),
+)
 async def registartion_parent(item: VerifyMobilePhone):
     item.phone = await check_correct_phone(item.phone)
-    if item.phone is None: return uncorrect_phone
+    if item.phone is None:
+        return uncorrect_phone
     if await UsersUser.filter(phone=item.phone).count() > 0:
         return user_already_creates
     code = randint(1000, 9999)
@@ -107,13 +110,14 @@ async def registartion_parent(item: VerifyMobilePhone):
     return success_answer
 
 
-@router.post("/check_registration_code",
-             responses=generate_responses([uncorrect_phone,
-                                           uncorrect_code,
-                                           success_answer]))
+@router.post(
+    "/check_registration_code",
+    responses=generate_responses([uncorrect_phone, uncorrect_code, success_answer]),
+)
 async def registartion_parent(item: VerifyCodeMobilePhone):
     item.phone = await check_correct_phone(item.phone)
-    if item.phone is None: return uncorrect_phone
+    if item.phone is None:
+        return uncorrect_phone
     data = await WaitDataVerifyCode.filter(phone=item.phone).first().values()
     if data is None:
         return uncorrect_phone
@@ -124,63 +128,109 @@ async def registartion_parent(item: VerifyCodeMobilePhone):
     return success_answer
 
 
-@router.post("/register_parent",
-             responses=generate_responses([user_already_creates,
-                                          uncorrect_phone,
-                                          success_answer]))
+@router.post(
+    "/register_parent",
+    responses=generate_responses(
+        [user_already_creates, uncorrect_phone, success_answer]
+    ),
+)
 async def registartion_parent(item: RegistrationParent):
     item.phone = await check_correct_phone(item.phone)
-    if item.phone is None: return uncorrect_phone
-    if await UsersUser.filter(phone=item.phone).count()>0:
+    if item.phone is None:
+        return uncorrect_phone
+    if await UsersUser.filter(phone=item.phone).count() > 0:
         return user_already_creates
     if await WaitDataVerifyRegistration.filter(phone=item.phone).count() == 0:
         return uncorrect_phone
     await WaitDataVerifyRegistration.filter(phone=item.phone).delete()
-    user = await UsersUser.create(surname=item.surname, name=item.name,
-                                    phone=item.phone)
-    await UsersAuthorizationData.create(login=item.phone, password=item.password, id_user=user.id)
+    user = await UsersUser.create(
+        surname=item.surname, name=item.name, phone=item.phone
+    )
+    await UsersAuthorizationData.create(
+        login=item.phone, password=item.password, id_user=user.id
+    )
     await UsersVerifyAccount.create(id_user=user.id)
     await UsersUserAccount.create(id_user=user.id, id_type_account=1)
     return success_answer
 
 
-@router.post("/register_driver",
-             responses=generate_responses([user_already_creates,
-                                           uncorrect_phone,
-                                           success_answer]))
-async def registartion_driver(item: RegistrationDriver):
+@router.post(
+    "/register_driver",
+    responses=generate_responses(
+        [user_already_creates, uncorrect_phone, success_answer]
+    ),
+)
+async def registration_driver(item: RegistrationDriver):
     item.phone = await check_correct_phone(item.phone)
-    if item.phone is None: return uncorrect_phone
+    if item.phone is None:
+        return uncorrect_phone
     if await UsersUser.filter(phone=item.phone, isActive__in=[True, False]).count() > 0:
-        data_check = await UsersUser.filter(phone=item.phone, isActive__in=[True, False]).first().values()
-        if await UsersUserAccount.filter(id_user=data_check["id"], id_type_account=2).count() > 0:
+        data_check = (
+            await UsersUser.filter(phone=item.phone, isActive__in=[True, False])
+            .first()
+            .values()
+        )
+        if (
+            await UsersUserAccount.filter(
+                id_user=data_check["id"], id_type_account=2
+            ).count()
+            > 0
+        ):
             return user_already_creates
     if await WaitDataVerifyRegistration.filter(phone=item.phone).count() == 0:
         return uncorrect_phone
     await WaitDataVerifyRegistration.filter(phone=item.phone).delete()
-    if await UsersUser.filter(phone=item.phone, isActive__in=[True, False]).count() == 0:
-        user = await UsersUser.create(surname=item.surname, name=item.name, phone=item.phone)
-        await UsersAuthorizationData.create(login=item.phone, password=item.password, id_user=user.id)
+    if (
+        await UsersUser.filter(phone=item.phone, isActive__in=[True, False]).count()
+        == 0
+    ):
+        user = await UsersUser.create(
+            surname=item.surname, name=item.name, phone=item.phone
+        )
+        await UsersAuthorizationData.create(
+            login=item.phone, password=item.password, id_user=user.id
+        )
     else:
-        user = DictToModel(await UsersUser.filter(phone=item.phone, isActive__in=[True, False]).first().values())
+        user = DictToModel(
+            await UsersUser.filter(phone=item.phone, isActive__in=[True, False])
+            .first()
+            .values()
+        )
     id_car = await UsersCar.create(
-                                   id_car_mark=item.carData.autoMark, id_car_model=item.carData.autoModel,
-                                   id_color=item.carData.autoColor, year_create=item.carData.releaseYear,
-                                   state_number=item.carData.state_number, ctc=item.carData.ctc)
+        id_car_mark=item.carData.autoMark,
+        id_car_model=item.carData.autoModel,
+        id_color=item.carData.autoColor,
+        year_create=item.carData.releaseYear,
+        state_number=item.carData.state_number,
+        ctc=item.carData.ctc,
+    )
     id_driver_card = await UsersDriverCard.create(
-                                    id_country=item.driverLicense.receiveCountry,
-                                    date_of_issue=datetime.datetime.strptime(item.driverLicense.receiveDate,
-                                                                             "%d.%m.%Y"),
-                                    license=item.driverLicense.license)
+        id_country=item.driverLicense.receiveCountry,
+        date_of_issue=datetime.datetime.strptime(
+            item.driverLicense.receiveDate, "%d.%m.%Y"
+        ),
+        license=item.driverLicense.license,
+    )
     id_answers = await UsersDriverAnswer.create(
-                                                first_answer=item.answers.first, second_answer=item.answers.second,
-                                                third_answer=item.answers.third, four_answer=item.answers.fourth,
-                                                five_answer=item.answers.fifth, six_answer=item.answers.sixth,
-                                                seven_answer=item.answers.seventh)
+        first_answer=item.answers.first,
+        second_answer=item.answers.second,
+        third_answer=item.answers.third,
+        four_answer=item.answers.fourth,
+        five_answer=item.answers.fifth,
+        six_answer=item.answers.sixth,
+        seven_answer=item.answers.seventh,
+    )
     await UsersDriverData.create(
-                                 id_car=id_car.id, id_driver_card=id_driver_card.id, id_driver=user.id,
-                                 id_driver_answer=id_answers.id, id_city=item.city, description=item.description,
-                                 age=item.age, video_url=item.videoUrl, inn=item.inn_data)
+        id_car=id_car.id,
+        id_driver_card=id_driver_card.id,
+        id_driver=user.id,
+        id_driver_answer=id_answers.id,
+        id_city=item.city,
+        description=item.description,
+        age=item.age,
+        video_url=item.videoUrl,
+        inn=item.inn_data,
+    )
     if await UsersUserPhoto.filter(id_user=user.id).count() == 0:
         await UsersUserPhoto.create(id_user=user.id, photo_path=item.photoUrl)
     else:
@@ -191,18 +241,42 @@ async def registartion_driver(item: RegistrationDriver):
     if await UsersReferalCode.filter(id_user=user.id).count() == 0:
         code = randint(100000, 999999999)
         while await UsersReferalCode.filter(code=code).count() > 0:
-            code=randint(100000, 999999999)
+            code = randint(100000, 999999999)
         await UsersReferalCode.create(id_user=user.id, code=code, percent=5)
     try:
         if item.refCode is None:
             await UsersFranchiseUser.create(id_user=user.id, id_franchise=1)
         else:
-            partners = [x["id_user"] for x in (await UsersUserAccount.filter(id_type_account=5).all().values())]
-            if await UsersReferalCode.filter(id_user__in=partners, code=item.refCode).count() > 0:
-                partners = await UsersReferalCode.filter(id_user__in=partners, code=item.refCode).first().values()
-                await UsersReferalUser.create(id_user=partners["id_user"], id_user_referal=user.id)
-                franchise = await UsersFranchiseUser.filter(id_user=partners["id_user"]).first().values()
-                await UsersFranchiseUser.create(id_user=user.id, id_franchise=franchise["id_franchise"])
+            partners = [
+                x["id_user"]
+                for x in (
+                    await UsersUserAccount.filter(id_type_account=5).all().values()
+                )
+            ]
+            if (
+                await UsersReferalCode.filter(
+                    id_user__in=partners, code=item.refCode
+                ).count()
+                > 0
+            ):
+                partners = (
+                    await UsersReferalCode.filter(
+                        id_user__in=partners, code=item.refCode
+                    )
+                    .first()
+                    .values()
+                )
+                await UsersReferalUser.create(
+                    id_user=partners["id_user"], id_user_referal=user.id
+                )
+                franchise = (
+                    await UsersFranchiseUser.filter(id_user=partners["id_user"])
+                    .first()
+                    .values()
+                )
+                await UsersFranchiseUser.create(
+                    id_user=user.id, id_franchise=franchise["id_franchise"]
+                )
             else:
                 await UsersFranchiseUser.create(id_user=user.id, id_franchise=1)
     except Exception:
