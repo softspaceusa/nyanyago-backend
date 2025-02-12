@@ -34,7 +34,9 @@ clients = {}
 
 """
 ПО СОСТОЯНИЮ НА 24.01.2025
-# TODO: добавить ссылку на диаграмму последовательности
+
+ДИАГРАММА: https://pastebin.com/zwy1fXEi
+ПАРОЛЬ для диаграммы: kctywVFDq8
 
 Статусы заказа:
 1	Создан
@@ -612,6 +614,8 @@ async def websocket_endpoint_client(websocket: WebSocket, token: str):
                     await websocket.send_text(json.dumps({"message": "Order cancelled"}))
                     await websocket.close(code=1000)
                     break
+                if message_data.get("come_out") == "true":
+                    await send_message_to_driver(user_order.id_order, message_data)
 
                 # message_data["id_order"] = user_order.id_order
                 # await send_message_to_driver(user_order.id_order, message_data)
