@@ -182,12 +182,12 @@ async def get_schedule(request: Request, limit: Union[int, None] = 30, offset: U
         schedule["other_parametrs"] = other_parametrs_data
         roads = await DataScheduleRoad.filter(id_schedule=schedule["id"], isActive=True).order_by("id").all().values()
 
-        total_salary = 0.0  # Changed to float
+        all_price = 0
         for road in roads:
             road["type_drive"] = [int(x) for x in road["type_drive"].split(";")]
             addresses = await DataScheduleRoadAddress.filter(id_schedule_road=road["id"]).order_by("id").all().values()
             data_addresses = []
-            road_salary = 0.0  # Changed to float
+            price_road = road.get("amount", -1)
 
             for address in addresses:
                 address_data = {
@@ -208,27 +208,17 @@ async def get_schedule(request: Request, limit: Union[int, None] = 30, offset: U
                 }
                 data_addresses.append(address_data)
 
-                # Calculate salary for this route segment
-                salary, duration = await get_time_drive(
-                    address["from_lat"],
-                    address["from_lon"],
-                    address["to_lat"],
-                    address["to_lon"],
-                    schedule["children_count"]
-                )
-                if salary is not None:
-                    road_salary += float(salary)  # Convert to float explicitly
-
             road["addresses"] = data_addresses
-            road["salary"] = float(road_salary)  # Ensure salary is float
-            total_salary += road_salary
+            road["salary"] = round(float(price_road), 2)
+            all_price += price_road
 
-            del road["id_schedule"]
-            del road["isActive"]
-            del road["datetime_create"]
+            road.pop("id_schedule", None)
+            road.pop("amount", None)
+            road.pop("isActive", None)
+            road.pop("datetime_create", None)
 
         schedule["roads"] = roads
-        schedule["all_salary"] = float(total_salary)  # Ensure total salary is float
+        schedule["all_salary"] = round(float(all_price), 2)  # Ensure total salary is float
         del schedule["id_user"]
 
     return JSONResponse({"status": True,
