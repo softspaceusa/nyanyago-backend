@@ -1141,6 +1141,7 @@ async def get_drive_info(id_order: int):
         "id_driver": order.id_driver,
         "id_order": id_order,
         "addresses": addresses,
+        "id_tariff": order_info.id_tariff,
         "total_price": round(float(order_info.price), 2),
         "total_distance_meters": order_info.distance,
         "total_duration_seconds_estimated": order_info.duration,
