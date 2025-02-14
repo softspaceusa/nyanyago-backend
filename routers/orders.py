@@ -202,7 +202,7 @@ async def create_schedule(request: Request, item: NewSchedule):
         id_tariff=item.id_tariff,
         description=item.description,
         week_days=";".join(map(str, item.week_days)),
-        isActive=True,
+        # isActive=True,
     )
     for params in item.other_parametrs:
         if (
