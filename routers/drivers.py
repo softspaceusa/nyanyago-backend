@@ -315,31 +315,106 @@ async def get_today_schedule(request: Request):
                          "schedule": result})
 
 
-@router.post("/want_schedule_requests",
-             responses=generate_responses([success_answer,
-                                           schedule_not_found]))
+@router.post(
+    "/want_schedule_requests",
+    responses=generate_responses([success_answer, schedule_not_found]),
+)
 async def want_schedule_requests(request: Request, item: WantSchedule):
     if await DataSchedule.filter(id=item.id_schedule, isActive=False).count() != 1:
         return schedule_not_found
-    schedule, req = await DataSchedule.filter(id=item.id_schedule, isActive=False).first().values(), {}
+    schedule, req = (
+        await DataSchedule.filter(id=item.id_schedule, isActive=False).first().values(),
+        {},
+    )
     for each in item.id_road:
-        if await DataScheduleRoad.filter(id_schedule=item.id_schedule, id=each).count() != 1:
-            return schedule_not_found
-        if await DataScheduleRoadDriver.filter(id_schedule_road=each, isRepeat=True).count() != 0:
-            return schedule_not_found
-        if await WaitDataScheduleRoadDriver.filter(id_road=each,isActive=None,id_schedule=item.id_schedule).count()!=0:
-            return schedule_not_found
+        if (
+            await DataScheduleRoad.filter(id_schedule=item.id_schedule, id=each).count()
+            != 1
+        ):
+            return JSONResponse(
+                {
+                    "status": False,
+                    "message": "Some of the roads do not belong to this schedule!",
+                },
+                404,
+            )
+        if (
+            await DataScheduleRoadDriver.filter(
+                id_schedule_road=each, isRepeat=True
+            ).count()
+            != 0
+        ):
+            return JSONResponse(
+                {"status": False, "message": "Some of the roads already have drivers!"},
+                404,
+            )
+        if (
+            await WaitDataScheduleRoadDriver.filter(
+                id_road=each, isActive=None, id_schedule=item.id_schedule
+            ).count()
+            != 0
+        ):
+            return JSONResponse(
+                {
+                    "status": False,
+                    "message": "Some of the roads already have requests!",
+                },
+                404,
+            )
+    requests = []
     for each in item.id_road:
-        req=await WaitDataScheduleRoadDriver.create(id_driver=request.user, id_road=each, id_schedule=item.id_schedule)
+        req = await WaitDataScheduleRoadDriver.create(
+            id_driver=request.user, id_road=each, id_schedule=item.id_schedule
+        )
+        requests.append(
+            {
+                "id": req.id,
+                "id_schedule": item.id_schedule,
+                "id_road": each,
+                "isActive": req.isActive,
+            }
+        )
     print(schedule["id_user"])
-    fbid = await UsersBearerToken.filter(id_user=schedule["id_user"]).order_by("-id").first().values()
+    fbid = (
+        await UsersBearerToken.filter(id_user=schedule["id_user"])
+        .order_by("-id")
+        .first()
+        .values()
+    )
     print(fbid)
     try:
-        await sendPush(fbid["fbid"], "Получена новая заявка",
-                       "По вашему контракту получен новый отклик от водителя",
-                       {"action": "order_request", "id_request": req.id})
-        await HistoryNotification.create(id_user=schedule["id_user"], title="Получена новая заявка",
-                                         description="По вашему контракту получен новый отклик от водителя")
+        await sendPush(
+            fbid["fbid"],
+            "Получена новая заявка",
+            "По вашему контракту получен новый отклик от водителя",
+            {"action": "order_request", "id_request": req.id},
+        )
+        await HistoryNotification.create(
+            id_user=schedule["id_user"],
+            title="Получена новая заявка",
+            description="По вашему контракту получен новый отклик от водителя",
+        )
     except Exception:
         print(traceback.format_exc())
-    return success_answer
+
+    schedule = (
+        await DataSchedule.filter(id=item.id_schedule, isActive=False).first().values()
+    )
+    schedule.pop("datetime_create", None)
+    roads = []
+    for each in item.id_road:
+        road = await DataScheduleRoad.filter(id=each).first().values()
+        road.pop("datetime_create", None)
+        road["amount"] = round(float(road.get("amount", 0)), 2)
+        roads.append(road)
+    return JSONResponse(
+        {
+            "status": True,
+            "message": "Success!",
+            "schedule": schedule,
+            "roads": roads,
+            "requests": requests,
+        },
+        200,
+    )
+
