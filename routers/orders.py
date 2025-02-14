@@ -1529,9 +1529,6 @@ async def get_schedule_responses(request: Request):
 @router.post("/answer_schedule_responses",
              responses=generate_responses([success_answer]))
 async def answer_schedule_responses(request: Request, item: AnswerResponse):
-    """
-    Deprecated
-    """
     if await DataSchedule.filter(isActive=False, id_user=request.user, id=item.id_schedule).count() == 0:
         return schedule_not_found
     if await WaitDataScheduleRoadDriver.filter(id=item.id_response, isActive=True).count() == 0:
