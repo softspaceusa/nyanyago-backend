@@ -457,7 +457,7 @@ async def process_active_orders(driver_mode, websocket, token):
                 distance = calculate_distance(driver_mode.latitude, driver_mode.longitude,
                                               addresses.from_lat, addresses.from_lon)
                 if distance <= 3:  # Проверка на расстояние не более 3 км
-                    order = await get_order_data_for_socket(user_order.id_order)
+                    order = await get_drive_info(user_order.id_order)
                     if order:
                         message = json.dumps(order, ensure_ascii=False)
                         await manager_driver.send_personal_message(message, websocket)
@@ -585,7 +585,7 @@ async def websocket_endpoint_client(websocket: WebSocket, token: str):
                 distance = calculate_distance(driver_mode.latitude, driver_mode.longitude,
                                               order_info.client_lat, order_info.client_lon)
                 if distance <= 3:  # Проверка на расстояние не более 3 км
-                    order = await get_order_data_for_socket(user_order.id_order)
+                    order = await get_drive_info(user_order.id_order)
                     if order:
                         message = json.dumps(order, ensure_ascii=False)
                         await manager_driver.send_personal_message(message, driver_socket)
@@ -600,7 +600,7 @@ async def websocket_endpoint_client(websocket: WebSocket, token: str):
                 try:
                     message_data = json.loads(message)
                 except json.JSONDecodeError as e:
-                    await manager_driver.send_personal_message(json.dumps({"error": "Invalid JSON format"}), websocket)
+                    await manager_client.send_personal_message(json.dumps({"error": "Invalid JSON format"}), websocket)
                     continue
 
                 if message_data.get("status") == "exit":
@@ -843,6 +843,11 @@ async def start_onetime_drive(request: Request, item: CurrentDrive):
         - id=5 - Довести ребёнка
         - id=6 - Переодеть ребёнка
 
+    Ключ-значение для `type_drive`:
+        - 1 - В один конец
+        - 2 - Туда-обратно
+        - 3 - С остановкой
+
 
     Example:
 
@@ -873,7 +878,12 @@ async def start_onetime_drive(request: Request, item: CurrentDrive):
               ],
               "description": "string",
               "idTariff": 1,
-              "other_parametrs": []
+              "type_drive": 1,
+              "other_parametrs": [
+                {
+                  "parametr": 1,
+                },
+              ]
             }
 
         Пример выходных данных:
@@ -907,7 +917,8 @@ async def start_onetime_drive(request: Request, item: CurrentDrive):
     Returns:
         JSONResponse: Ответ с данными созданной поездки и токен
     """
-    order = await DataOrder.create(id_user=request.user, id_status=1, id_type_order=1)
+    order = await DataOrder.create(id_user=request.user, id_status=1, id_type_order=1,
+                                   type_drive=item.type_drive-1)
 
     all_addresses = []
 
@@ -980,7 +991,11 @@ async def start_onetime_drive(request: Request, item: CurrentDrive):
             to_lon=to_lon,
             isFinish=is_finish,
         )
-
+    tp: float = round(total_price, 2)
+    if item.type_drive == 2:
+        tp = round(total_price * 2, 2)
+        total_distance = total_distance * 2
+        total_duration = total_duration * 2
     await DataOrderInfo.create(
         id_order=order.id,
         client_lon=item.my_location.longitude,
@@ -988,13 +1003,13 @@ async def start_onetime_drive(request: Request, item: CurrentDrive):
         id_tariff=item.idTariff,
         distance=total_distance,
         duration=total_duration,
-        price=round(total_price, 2),
+        price=tp,
     )
 
     if item.other_parametrs is not None and len(item.other_parametrs) > 0:
         for each in item.other_parametrs:
             await DataOrderOtherParametrs.create(
-                id_order=order.id, id_other_parametr=each.parametr, amount=each.count
+                id_order=order.id, id_other_parametr=each.parametr, amount=each.count or 0
             )
     token = str(uuid.uuid4()) + str(uuid.uuid4())
     while (
@@ -1012,7 +1027,7 @@ async def start_onetime_drive(request: Request, item: CurrentDrive):
             "id_order": order.id,
             "time": str(time.time()),
             "addresses": all_addresses,
-            "total_price": round(total_price, 2),
+            "total_price": tp,
             "total_distance_meters": total_distance,
             "total_duration_seconds_estimated": total_duration,
         }
@@ -1075,6 +1090,7 @@ async def ping_endpoint(websocket: WebSocket):
         logger.info("Connection to /ping closed")
 
     await websocket.close()
+
 
 async def get_drive_info(id_order: int):
     """

@@ -1526,16 +1526,52 @@ async def get_schedule_responses(request: Request):
     return JSONResponse({"status": True, "message": "Success!", "responses": answer})
 
 
-@router.post("/answer_schedule_responses",
-             responses=generate_responses([success_answer]))
+@router.post(
+    "/answer_schedule_responses", responses=generate_responses([success_answer])
+)
 async def answer_schedule_responses(request: Request, item: AnswerResponse):
-    if await DataSchedule.filter(isActive=False, id_user=request.user, id=item.id_schedule).count() == 0:
+    """
+    Эндпоинт для ответа клиентом на принятую заявку водителя.
+    (Водитель принимает заявку с помощью эндпоинта `/drivers/want_schedule_requests`).
+
+    Args:
+        request (Request): Объект запроса.
+        item (AnswerResponse): Объект с данными для ответа клиентом.
+
+    Returns:
+        JSONResponse: Ответ с информацией об успешном ответе.
+    """
+    if (
+            await DataSchedule.filter(
+                isActive=False, id_user=request.user, id=item.id_schedule
+            ).count()
+            == 0
+    ):
         return schedule_not_found
-    if await WaitDataScheduleRoadDriver.filter(id=item.id_response, isActive=True).count() == 0:
+    if (
+            await WaitDataScheduleRoadDriver.filter(
+                id=item.id_response, isActive=True
+            ).count()
+            == 0
+    ):
         return schedule_not_found
-    data = await WaitDataScheduleRoadDriver.filter(id=item.id_response, isActive=True).first().values()
-    id_responses = [x["id"] for x in (await WaitDataScheduleRoadDriver.filter(
-                    id_driver=data["id_driver"], id_schedule=data["id_schedule"], isActive=True).all().values())]
+    data = (
+        await WaitDataScheduleRoadDriver.filter(id=item.id_response, isActive=True)
+        .first()
+        .values()
+    )
+    id_responses = [
+        x["id"]
+        for x in (
+            await WaitDataScheduleRoadDriver.filter(
+                id_driver=data["id_driver"],
+                id_schedule=data["id_schedule"],
+                isActive=True,
+            )
+            .all()
+            .values()
+        )
+    ]
     roads = []
     for each in id_responses:
         if item.flag is False:
@@ -1544,31 +1580,53 @@ async def answer_schedule_responses(request: Request, item: AnswerResponse):
             road = await WaitDataScheduleRoadDriver.filter(id=each).first().values()
             await WaitDataScheduleRoadDriver.filter(id=each).update(isActive=None)
             roads.append(road["id_road"])
-            await DataScheduleRoadDriver.create(id_schedule_road=road["id_road"], id_driver=data["id_driver"],
-                                                isRepeat=True)
-    fbid = await UsersBearerToken.filter(id_user=data["id_driver"]).order_by("-id").first().values()
+            await DataScheduleRoadDriver.create(
+                id_schedule_road=road["id_road"],
+                id_driver=data["id_driver"],
+                isRepeat=True,
+            )
+    fbid = (
+        await UsersBearerToken.filter(id_user=data["id_driver"])
+        .order_by("-id")
+        .first()
+        .values()
+    )
     if item.flag is True:
         await DataSchedule.filter(id=item.id_schedule).update(isActive=True)
         try:
-            await sendPush(fbid["fbid"], "Ваша заявка на контракт одобрена",
-                           "Родитель одобрил Вашу кандидатуру на контракт.\n"
-                           "Пожалуйста, подтвердите актуальность Вашей заявки в приложении.",
-                           {"action": "order_request_success",
-                            "id_request": item.id_response,
-                            "id_schedule": item.id_schedule})
-            await HistoryNotification.create(id_user=data["id_driver"], title="Ваша заявка на контракт одобрена",
-                                             description="Родитель одобрил Вашу кандидатуру на контракт.\n"
-                                             "Пожалуйста, подтвердите актуальность Вашей заявки в приложении.")
+            await sendPush(
+                fbid["fbid"],
+                "Ваша заявка на контракт одобрена",
+                "Родитель одобрил Вашу кандидатуру на контракт.\n"
+                "Пожалуйста, подтвердите актуальность Вашей заявки в приложении.",
+                {
+                    "action": "order_request_success",
+                    "id_request": item.id_response,
+                    "id_schedule": item.id_schedule,
+                },
+            )
+            await HistoryNotification.create(
+                id_user=data["id_driver"],
+                title="Ваша заявка на контракт одобрена",
+                description="Родитель одобрил Вашу кандидатуру на контракт.\n"
+                            "Пожалуйста, подтвердите актуальность Вашей заявки в приложении.",
+            )
         except Exception:
             pass
     else:
         try:
-            await sendPush(fbid["fbid"], "Ваша заявка на контракт отклонена",
-                           "К сожалению, родителю не подошла Ваша кандидатура на роль автоняни.",
-                           {"action": "order_request_denied"})
-            await HistoryNotification.create(id_user=data["id_driver"], title="Ваша заявка на контракт отклонена",
-                                             description="К сожалению, родителю не подошла Ваша кандидатура"
-                                                         " на роль автоняни.")
+            await sendPush(
+                fbid["fbid"],
+                "Ваша заявка на контракт отклонена",
+                "К сожалению, родителю не подошла Ваша кандидатура на роль автоняни.",
+                {"action": "order_request_denied"},
+            )
+            await HistoryNotification.create(
+                id_user=data["id_driver"],
+                title="Ваша заявка на контракт отклонена",
+                description="К сожалению, родителю не подошла Ваша кандидатура"
+                            " на роль автоняни.",
+            )
         except Exception:
             pass
     return success_answer

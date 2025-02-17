@@ -419,6 +419,7 @@ class CurrentDrive(BaseModel):
     addresses: List[DriveAddresses]
     description: str
     idTariff: int
+    type_drive: Union[int, None] = 1  # Тип поездки: в одну сторону, туда-обратно, с промежуточными точками (1, 2, 3)
     other_parametrs: Union[List[OtherParams], None] = []
 
 
@@ -428,7 +429,7 @@ class Road(BaseModel):
     end_time: str
     addresses: List[DriveAddresses]
     title: str
-    type_drive: list # Тип поездки: в одну сторону, туда-обратно, с промежуточными точками (1, 2, 3)
+    type_drive: list  # Тип поездки: в одну сторону, туда-обратно, с промежуточными точками (1, 2, 3)
 
 
 class UpdateRoad(BaseModel):
