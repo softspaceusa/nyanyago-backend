@@ -453,229 +453,365 @@ async def delete_debit_card(request: Request, item: DeleteDebitCard):
     return success_answer
 
 
-@router.post("/start_sbp_payment",
-             responses=generate_responses([start_sbp_answer]))
+@router.post("/start_sbp_payment", responses=generate_responses([start_sbp_answer]))
 async def start_sbp_payment(request: Request, item: SbpPayment):
     content_type = {"Content-Type": "application/json"}
-    order_id = hashlib.md5(str(("%032x" % random.getrandbits(128))+str(request.user)).encode()).hexdigest()
+    order_id = hashlib.md5(
+        str(("%032x" % random.getrandbits(128)) + str(request.user)).encode()
+    ).hexdigest()
     data = {
-              "TerminalKey": "1692261610441",
-              "Amount": item.amount,
-              "OrderId": order_id,
-              "Description": "Пополнение баланса аккаунта АвтоНяня",
-              "PayType": "O",
-              "DATA": {
-                 "Phone": item.phone,
-                 "Email": item.email,
-                 "TinkoffPayWeb": "true",
-                 "Device": "Mobile",
-                 "DeviceOs": "Android",
-                 "DeviceWebView": "true",
-                 "DeviceBrowser": "Chrome",
-                 "notificationEnableSource": "sbpqr"
-              }
+        "TerminalKey": "1692261610441",
+        "Amount": item.amount,
+        "OrderId": order_id,
+        "Description": "Пополнение баланса аккаунта АвтоНяня",
+        "PayType": "O",
+        "DATA": {
+            "Phone": item.phone,
+            "Email": item.email,
+            "TinkoffPayWeb": "true",
+            "Device": "Mobile",
+            "DeviceOs": "Android",
+            "DeviceWebView": "true",
+            "DeviceBrowser": "Chrome",
+            "notificationEnableSource": "sbpqr",
+        },
     }
-    init_data = requests.post("https://securepay.tinkoff.ru/v2/Init", json=data, headers=content_type).json()
+    init_data = requests.post(
+        "https://securepay.tinkoff.ru/v2/Init", json=data, headers=content_type
+    ).json()
     if init_data["Success"] is False:
         print(init_data)
         raise HTTPException(505, detail=init_data)
     qr_data = {
         "PaymentId": init_data["PaymentId"],
         "TerminalKey": "1692261610441",
-        "Token": hashlib.sha256(f"{item.amount}cz9mvi6nawsft86w"
-                                f"{init_data['PaymentId']}1692261610441".encode()).hexdigest(),
-
+        "Token": hashlib.sha256(
+            f"{item.amount}cz9mvi6nawsft86w"
+            f"{init_data['PaymentId']}1692261610441".encode()
+        ).hexdigest(),
     }
-    sbp = requests.post("https://securepay.tinkoff.ru/v2/GetQr", headers=content_type, json=qr_data)
-    await HistoryPaymentTink.create(id_user=request.user, id_payment=init_data["PaymentId"], id_order=order_id,
-                                    amount=item.amount)
-    return JSONResponse({"status": True,
-                         "message": "Success!",
-                         "payment": {
-                             "amount": item.amount,
-                             "PaymentId": init_data["PaymentId"],
-                             "payment_url": sbp.json()["Data"]
-                         }})
+    sbp = requests.post(
+        "https://securepay.tinkoff.ru/v2/GetQr", headers=content_type, json=qr_data
+    )
+    await HistoryPaymentTink.create(
+        id_user=request.user,
+        id_payment=init_data["PaymentId"],
+        id_order=order_id,
+        amount=item.amount,
+    )
+    return JSONResponse(
+        {
+            "status": True,
+            "message": "Success!",
+            "payment": {
+                "amount": item.amount,
+                "PaymentId": init_data["PaymentId"],
+                "payment_url": sbp.json()["Data"],
+            },
+        }
+    )
 
 
 @router.post("/start_payment")
 async def generate_url_for_payment(request: Request, item: UserDataPayment):
     print(item.__dict__)
     content_type = {"Content-Type": "application/json"}
-    order_id = hashlib.md5(str(("%032x" % random.getrandbits(128))+str(request.user)).encode()).hexdigest()
+    order_id = hashlib.md5(
+        str(("%032x" % random.getrandbits(128)) + str(request.user)).encode()
+    ).hexdigest()
     data = {
-              "TerminalKey": "1692261610441",
-              "Amount": item.amount,
-              "OrderId": order_id,
-              "Description": "Пополнение баланса аккаунта АвтоНяня",
-              "SuccessURL": f"https://nynyago.ru/api/v1.0/payments/payments_success?order_id={order_id}",
-              "NotificationURL": f"https://nynyago.ru/api/v1.0/payments/payments_status/{order_id}",
-              "FailURL": "https://nynyago.ru/api/v1.0/payments/payments_unsuccessful?order_id={order_id}",
-              "PayType": "O",
-              "DATA": {
-                 "Phone": item.phone,
-                 "Email": item.email,
-                 "TinkoffPayWeb": "true",
-                 "Device": "Mobile",
-                 "DeviceOs": "Android",
-                 "DeviceWebView": "true",
-                 "DeviceBrowser": "Chrome"
-              }
-            }
-    init_data = requests.post("https://securepay.tinkoff.ru/v2/Init", json=data, headers=content_type).json()
+        "TerminalKey": "1692261610441",
+        "Amount": item.amount,
+        "OrderId": order_id,
+        "Description": "Пополнение баланса аккаунта АвтоНяня",
+        "SuccessURL": f"https://nynyago.ru/api/v1.0/payments/payments_success?order_id={order_id}",
+        "NotificationURL": f"https://nynyago.ru/api/v1.0/payments/payments_status/{order_id}",
+        "FailURL": "https://nynyago.ru/api/v1.0/payments/payments_unsuccessful?order_id={order_id}",
+        "PayType": "O",
+        "DATA": {
+            "Phone": item.phone,
+            "Email": item.email,
+            "TinkoffPayWeb": "true",
+            "Device": "Mobile",
+            "DeviceOs": "Android",
+            "DeviceWebView": "true",
+            "DeviceBrowser": "Chrome",
+        },
+    }
+    init_data = requests.post(
+        "https://securepay.tinkoff.ru/v2/Init", json=data, headers=content_type
+    ).json()
     if init_data["Success"] is False:
         print(init_data)
         raise HTTPException(505, detail=init_data)
     check_data = {
-                  "PaymentId": init_data["PaymentId"],
-                  "TerminalKey": "1692261610441",
-                  "CardData": item.card_data,
-                  "Token": hashlib.sha256(f"{item.amount}cz9mvi6nawsft86w"
-                                          f"{init_data['PaymentId']}1692261610441".encode()).hexdigest()
-                }
-    check_3ds_data = requests.post("https://securepay.tinkoff.ru/v2/Check3dsVersion", json=check_data, headers=content_type).json()
+        "PaymentId": init_data["PaymentId"],
+        "TerminalKey": "1692261610441",
+        "CardData": item.card_data,
+        "Token": hashlib.sha256(
+            f"{item.amount}cz9mvi6nawsft86w"
+            f"{init_data['PaymentId']}1692261610441".encode()
+        ).hexdigest(),
+    }
+    check_3ds_data = requests.post(
+        "https://securepay.tinkoff.ru/v2/Check3dsVersion",
+        json=check_data,
+        headers=content_type,
+    ).json()
     if item.ip is None:
         item.ip = "02a3:06f0:0004:0000:0000:0000:0000:0edf"
     if check_3ds_data["Success"] is False:
         print(check_3ds_data)
         raise HTTPException(506, detail=check_3ds_data)
     if check_3ds_data["Version"] == "2.1.0":
-        await WaitDataPaymentTink.create(id_user=request.user, id_payment=init_data["PaymentId"], id_order=order_id,
-                                         card_data=item.card_data, ip=item.ip, amount=item.amount,
-                                         token=hashlib.sha256(f"{item.amount}cz9mvi6nawsft86w{init_data['PaymentId']}"
-                                                              f"1692261610441".encode()).hexdigest(),
-                                         TdsServerTransID=check_3ds_data["TdsServerTransID"])
-        return JSONResponse({"is3DsVersion2": True,
-                             "TerminalKey": "1692261610441",
-                             "PaymentId": init_data["PaymentId"],
-                             "serverTransId": check_3ds_data["TdsServerTransID"],
-                             "ThreeDSMethodURL": check_3ds_data["ThreeDSMethodURL"]})
+        await WaitDataPaymentTink.create(
+            id_user=request.user,
+            id_payment=init_data["PaymentId"],
+            id_order=order_id,
+            card_data=item.card_data,
+            ip=item.ip,
+            amount=item.amount,
+            token=hashlib.sha256(
+                f"{item.amount}cz9mvi6nawsft86w{init_data['PaymentId']}"
+                f"1692261610441".encode()
+            ).hexdigest(),
+            TdsServerTransID=check_3ds_data["TdsServerTransID"],
+        )
+        return JSONResponse(
+            {
+                "is3DsVersion2": True,
+                "TerminalKey": "1692261610441",
+                "PaymentId": init_data["PaymentId"],
+                "serverTransId": check_3ds_data["TdsServerTransID"],
+                "ThreeDSMethodURL": check_3ds_data["ThreeDSMethodURL"],
+            }
+        )
     confirm_payment = {
-                        "PaymentId": init_data["PaymentId"],
-                        "TerminalKey": "1692261610441",
-                        "Token": hashlib.sha256(f"{item.amount}cz9mvi6nawsft86w"
-                                                f"{init_data['PaymentId']}1692261610441".encode()).hexdigest(),
-                        "IP": item.ip,
-                        "CardData": item.card_data,
-                        "Amount": item.amount,
-                        "deviceChannel": "02"
+        "PaymentId": init_data["PaymentId"],
+        "TerminalKey": "1692261610441",
+        "Token": hashlib.sha256(
+            f"{item.amount}cz9mvi6nawsft86w"
+            f"{init_data['PaymentId']}1692261610441".encode()
+        ).hexdigest(),
+        "IP": item.ip,
+        "CardData": item.card_data,
+        "Amount": item.amount,
+        "deviceChannel": "02",
     }
     if item.email is not None and len(item.email) > 0:
         confirm_payment["SendEmail"] = True
         confirm_payment["InfoEmail"] = item.email
-    confirm_payment_data = requests.post("https://securepay.tinkoff.ru/v2/FinishAuthorize", json=confirm_payment, headers=content_type).json()
-    token = hashlib.sha256(f"{item.amount}cz9mvi6nawsft86w{init_data['PaymentId']}1692261610441".encode()).hexdigest()
-    await HistoryPaymentTink.create(id_order=order_id, amount=item.amount, id_user=request.user, ip=item.ip,
-                                card_data=item.card_data, token=token, id_payment=init_data["PaymentId"])
+    confirm_payment_data = requests.post(
+        "https://securepay.tinkoff.ru/v2/FinishAuthorize",
+        json=confirm_payment,
+        headers=content_type,
+    ).json()
+    token = hashlib.sha256(
+        f"{item.amount}cz9mvi6nawsft86w{init_data['PaymentId']}1692261610441".encode()
+    ).hexdigest()
+    await HistoryPaymentTink.create(
+        id_order=order_id,
+        amount=item.amount,
+        id_user=request.user,
+        ip=item.ip,
+        card_data=item.card_data,
+        token=token,
+        id_payment=init_data["PaymentId"],
+    )
     if confirm_payment_data["Success"] is False:
         print(confirm_payment_data)
         raise HTTPException(507, detail=confirm_payment_data)
-    return JSONResponse({"status": True,
-                         "message": "Success!",
-                         "is3DsVersion2": True if check_3ds_data["Version"] == "2.1.0" else False\
-                                            if check_3ds_data["Version"] == "1.0.0" else None,
-                         "serverTransId": check_3ds_data["TdsServerTransID"] if "TdsServerTransID" in check_3ds_data \
-                                            and check_3ds_data["TdsServerTransID"] is not None else None,
-                         "acsUrl": confirm_payment_data["ACSUrl"],
-                         "md": confirm_payment_data["MD"],
-                         "paReq": confirm_payment_data["PaReq"],
-                         "TerminalKey": "1692261610441",
-                         "acsTransId": None if "AcsTransId" not in confirm_payment_data or \
-                                    confirm_payment_data["AcsTransId"] is None else confirm_payment_data["AcsTransId"]})
+    return JSONResponse(
+        {
+            "status": True,
+            "message": "Success!",
+            "is3DsVersion2": (
+                True
+                if check_3ds_data["Version"] == "2.1.0"
+                else False if check_3ds_data["Version"] == "1.0.0" else None
+            ),
+            "serverTransId": (
+                check_3ds_data["TdsServerTransID"]
+                if "TdsServerTransID" in check_3ds_data
+                and check_3ds_data["TdsServerTransID"] is not None
+                else None
+            ),
+            "acsUrl": confirm_payment_data["ACSUrl"],
+            "md": confirm_payment_data["MD"],
+            "paReq": confirm_payment_data["PaReq"],
+            "TerminalKey": "1692261610441",
+            "acsTransId": (
+                None
+                if "AcsTransId" not in confirm_payment_data
+                or confirm_payment_data["AcsTransId"] is None
+                else confirm_payment_data["AcsTransId"]
+            ),
+        }
+    )
 
 
 @router.post("/confirm_payment")
 async def confirm_payment_3dsV2(request: Request, item: ConfirmPayment):
     content_type = {"Content-Type": "application/json"}
-    data = await WaitDataPaymentTink.filter(id_user=request.user, id_payment=item.PaymentId).first().values()
+    data = (
+        await WaitDataPaymentTink.filter(
+            id_user=request.user, id_payment=item.PaymentId
+        )
+        .first()
+        .values()
+    )
     if data is None:
         return order_not_found
-    await WaitDataPaymentTink.filter(id_user=request.user, id_payment=item.PaymentId).delete()
+    await WaitDataPaymentTink.filter(
+        id_user=request.user, id_payment=item.PaymentId
+    ).delete()
     confirm_payment = {
-                        "PaymentId": item.PaymentId,
-                        "TerminalKey": "1692261610441",
-                        "Token": hashlib.sha256(f"{data['amount']}cz9mvi6nawsft86w"
-                                                f"{item.PaymentId}1692261610441".encode()).hexdigest(),
-                        "IP": data["ip"],
-                        "CardData": data["card_data"],
-                        "Amount": data["amount"],
-                        "deviceChannel": "02",
-                        "DATA": item.DATA
+        "PaymentId": item.PaymentId,
+        "TerminalKey": "1692261610441",
+        "Token": hashlib.sha256(
+            f"{data['amount']}cz9mvi6nawsft86w"
+            f"{item.PaymentId}1692261610441".encode()
+        ).hexdigest(),
+        "IP": data["ip"],
+        "CardData": data["card_data"],
+        "Amount": data["amount"],
+        "deviceChannel": "02",
+        "DATA": item.DATA,
     }
     if item.email is not None and len(item.email) > 0:
         confirm_payment["SendEmail"] = True
         confirm_payment["InfoEmail"] = item.email
-    confirm_payment_data = requests.post("https://securepay.tinkoff.ru/v2/FinishAuthorize", json=confirm_payment, headers=content_type).json()
-    token = hashlib.sha256(f"{data['amount']}cz9mvi6nawsft86w{item.PaymentId}1692261610441".encode()).hexdigest()
-    await HistoryPaymentTink.create(id_order=data["id_order"], amount=data["amount"], id_user=request.user, ip=data["ip"],
-                                card_data=data["card_data"], token=token, id_payment=item.PaymentId)
+    confirm_payment_data = requests.post(
+        "https://securepay.tinkoff.ru/v2/FinishAuthorize",
+        json=confirm_payment,
+        headers=content_type,
+    ).json()
+    token = hashlib.sha256(
+        f"{data['amount']}cz9mvi6nawsft86w{item.PaymentId}1692261610441".encode()
+    ).hexdigest()
+    await HistoryPaymentTink.create(
+        id_order=data["id_order"],
+        amount=data["amount"],
+        id_user=request.user,
+        ip=data["ip"],
+        card_data=data["card_data"],
+        token=token,
+        id_payment=item.PaymentId,
+    )
     print(confirm_payment_data)
     if confirm_payment_data["Success"] is False:
         print(confirm_payment_data)
         raise HTTPException(507, detail=confirm_payment_data)
-    return JSONResponse({"status": True,
-                         "message": "Success!",
-                         "is3DsVersion2": True,
-                         "serverTransId": confirm_payment_data["TdsServerTransId"],
-                         "acsUrl": confirm_payment_data["ACSUrl"] if "ACSUrl" in confirm_payment_data else None,
-                         "md": confirm_payment_data["MD"] if "MD" in confirm_payment_data else None,
-                         "paReq": confirm_payment_data["PaReq"] if "PaReq" in confirm_payment_data else None,
-                         "TerminalKey": "1692261610441",
-                         "acsTransId": None if "AcsTransId" not in confirm_payment_data or \
-                                    confirm_payment_data["AcsTransId"] is None else confirm_payment_data["AcsTransId"]})
+    return JSONResponse(
+        {
+            "status": True,
+            "message": "Success!",
+            "is3DsVersion2": True,
+            "serverTransId": confirm_payment_data["TdsServerTransId"],
+            "acsUrl": (
+                confirm_payment_data["ACSUrl"]
+                if "ACSUrl" in confirm_payment_data
+                else None
+            ),
+            "md": confirm_payment_data["MD"] if "MD" in confirm_payment_data else None,
+            "paReq": (
+                confirm_payment_data["PaReq"]
+                if "PaReq" in confirm_payment_data
+                else None
+            ),
+            "TerminalKey": "1692261610441",
+            "acsTransId": (
+                None
+                if "AcsTransId" not in confirm_payment_data
+                or confirm_payment_data["AcsTransId"] is None
+                else confirm_payment_data["AcsTransId"]
+            ),
+        }
+    )
 
 
-
-@router.post("/add_money",
-             responses=generate_responses([success_answer]))
+@router.post("/add_money", responses=generate_responses([success_answer]))
 async def add_money(request: Request, item: AddMoney):
     content_type = {"Content-Type": "application/json"}
-    if await HistoryPaymentTink.filter(id_user=request.user, id_payment=item.payment_id) == 0:
+    if (
+        await HistoryPaymentTink.filter(
+            id_user=request.user, id_payment=item.payment_id
+        )
+        == 0
+    ):
         raise HTTPException(404, "Payment id not found or not your!")
 
-    pay = await HistoryPaymentTink.filter(id_user=request.user, id_payment=item.payment_id).first().values()
+    pay = (
+        await HistoryPaymentTink.filter(
+            id_user=request.user, id_payment=item.payment_id
+        )
+        .first()
+        .values()
+    )
     data = {
-            "TerminalKey": "1692261610441",
-            "PaymentId": item.payment_id,
-            "Token": pay["token"],
+        "TerminalKey": "1692261610441",
+        "PaymentId": item.payment_id,
+        "Token": pay["token"],
     }
-    x = requests.post("https://securepay.tinkoff.ru/v2/GetState", json=data, headers=content_type).json()
+    x = requests.post(
+        "https://securepay.tinkoff.ru/v2/GetState", json=data, headers=content_type
+    ).json()
     print(x)
     if x["Status"] not in ["CONFIRMING", "CONFIRMED"]:
         raise HTTPException(402, "Unsuccessful update balance!")
-    user =  await DataUserBalance.filter(id_user=request.user).first().values()
+    user = await DataUserBalance.filter(id_user=request.user).first().values()
     if user is None:
         await DataUserBalance.create(id_user=request.user, money=item.amount)
-    user =  await DataUserBalance.filter(id_user=request.user).first().values()
-    await DataUserBalance.filter(id_user=request.user).update(money=user["money"]+decimal.Decimal(item.amount))
-    await DataUserBalanceHistory.create(id_user=request.user, money=decimal.Decimal(item.amount), id_task=-1,
-                                    isComplete=True, description="Пополнение баланса пользователя с банковской карты")
+    user = await DataUserBalance.filter(id_user=request.user).first().values()
+    await DataUserBalance.filter(id_user=request.user).update(
+        money=user["money"] + decimal.Decimal(item.amount)
+    )
+    await DataUserBalanceHistory.create(
+        id_user=request.user,
+        money=decimal.Decimal(item.amount),
+        id_task=-1,
+        isComplete=True,
+        description="Пополнение баланса пользователя с банковской карты",
+    )
     return success_answer
 
 
-@router.post("/start-payment",
-             responses=generate_responses([success_answer]))
+@router.post("/start-payment", responses=generate_responses([success_answer]))
 async def start_tinkoff_payment(request: Request, item: StartPayment):
     print(item.__dict__)
     terminal_key = "1692261610441"
     password = "cz9mvi6nawsft86w"
     content_type = {"Content-Type": "application/json"}
-    order_id = hashlib.md5(str(("%032x" % random.getrandbits(128))+str(request.user)).encode()).hexdigest()
-    token = hashlib.sha256(f"{item.amount}{order_id}{password}{terminal_key}".encode()).hexdigest()
+    order_id = hashlib.md5(
+        str(("%032x" % random.getrandbits(128)) + str(request.user)).encode()
+    ).hexdigest()
+    token = hashlib.sha256(
+        f"{item.amount}{order_id}{password}{terminal_key}".encode()
+    ).hexdigest()
     if await UsersPaymentClient.filter(id_user=request.user).count() == 0:
-        customer_key = hashlib.md5((str(uuid.uuid4())+str(request.user)+str(uuid.uuid4())).encode()).hexdigest()
+        customer_key = hashlib.md5(
+            (str(uuid.uuid4()) + str(request.user) + str(uuid.uuid4())).encode()
+        ).hexdigest()
         while await UsersPaymentClient.filter(customer_key=customer_key).count() > 0:
-            customer_key = hashlib.md5(str(uuid.uuid4()) + request.user + str(uuid.uuid4())).hexdigest()
+            customer_key = hashlib.md5(
+                str(uuid.uuid4()) + request.user + str(uuid.uuid4())
+            ).hexdigest()
         client = {
             "TerminalKey": terminal_key,
             "CustomerKey": customer_key,
             "Email": item.email,
             "Phone": item.phone,
-            "Token": token
+            "Token": token,
         }
-        new_client = requests.post("https://securepay.tinkoff.ru/v2/AddCustomer", json=client, headers=content_type)
+        new_client = requests.post(
+            "https://securepay.tinkoff.ru/v2/AddCustomer",
+            json=client,
+            headers=content_type,
+        )
         if new_client.json()["Success"] is True:
-            await UsersPaymentClient.create(id_user=request.user, customer_key=customer_key)
+            await UsersPaymentClient.create(
+                id_user=request.user, customer_key=customer_key
+            )
         else:
             return access_forbidden
     client = await UsersPaymentClient.filter(id_user=request.user).first().values()
@@ -697,10 +833,12 @@ async def start_tinkoff_payment(request: Request, item: StartPayment):
             "Device": "Mobile",
             "DeviceOs": "Android",
             "DeviceWebView": "true",
-            "DeviceBrowser": "Chrome"
-        }
+            "DeviceBrowser": "Chrome",
+        },
     }
-    init_data = requests.post("https://securepay.tinkoff.ru/v2/Init", json=data, headers=content_type).json()
+    init_data = requests.post(
+        "https://securepay.tinkoff.ru/v2/Init", json=data, headers=content_type
+    ).json()
     if init_data["Success"] is False:
         print(init_data)
         raise HTTPException(505, detail=init_data)
@@ -708,57 +846,104 @@ async def start_tinkoff_payment(request: Request, item: StartPayment):
         "PaymentId": init_data["PaymentId"],
         "TerminalKey": terminal_key,
         "CardData": item.card_data,
-        "Token": hashlib.sha256(f"{item.amount}{password}{init_data['PaymentId']}{terminal_key}".encode()).hexdigest()
+        "Token": hashlib.sha256(
+            f"{item.amount}{password}{init_data['PaymentId']}{terminal_key}".encode()
+        ).hexdigest(),
     }
-    check_3ds_data = requests.post("https://securepay.tinkoff.ru/v2/Check3dsVersion",
-                                                json=check_data, headers=content_type).json()
+    check_3ds_data = requests.post(
+        "https://securepay.tinkoff.ru/v2/Check3dsVersion",
+        json=check_data,
+        headers=content_type,
+    ).json()
     if item.ip is None:
         item.ip = "02a3:06f0:0004:0000:0000:0000:0000:0edf"
     if check_3ds_data["Success"] is False:
         print(check_3ds_data)
         raise HTTPException(506, detail=check_3ds_data)
     if check_3ds_data["Version"] == "2.1.0":
-        await WaitDataPaymentTink.create(id_user=request.user, id_payment=init_data["PaymentId"], id_order=order_id,
-                                         card_data=item.card_data, ip=item.ip, amount=item.amount,
-                                         token=hashlib.sha256(f"{item.amount}{password}{init_data['PaymentId']}"
-                                                              f"{terminal_key}".encode()).hexdigest(),
-                                         TdsServerTransID=check_3ds_data["TdsServerTransID"])
-        return JSONResponse({"is3DsVersion2": True,
-                             "TerminalKey": terminal_key,
-                             "PaymentId": init_data["PaymentId"],
-                             "serverTransId": check_3ds_data["TdsServerTransID"],
-                             "ThreeDSMethodURL": check_3ds_data["ThreeDSMethodURL"]})
+        await WaitDataPaymentTink.create(
+            id_user=request.user,
+            id_payment=init_data["PaymentId"],
+            id_order=order_id,
+            card_data=item.card_data,
+            ip=item.ip,
+            amount=item.amount,
+            token=hashlib.sha256(
+                f"{item.amount}{password}{init_data['PaymentId']}"
+                f"{terminal_key}".encode()
+            ).hexdigest(),
+            TdsServerTransID=check_3ds_data["TdsServerTransID"],
+        )
+        return JSONResponse(
+            {
+                "is3DsVersion2": True,
+                "TerminalKey": terminal_key,
+                "PaymentId": init_data["PaymentId"],
+                "serverTransId": check_3ds_data["TdsServerTransID"],
+                "ThreeDSMethodURL": check_3ds_data["ThreeDSMethodURL"],
+            }
+        )
     confirm_payment = {
         "PaymentId": init_data["PaymentId"],
         "TerminalKey": terminal_key,
-        "Token": hashlib.sha256(f"{item.amount}{password}{init_data['PaymentId']}{terminal_key}".encode()).hexdigest(),
+        "Token": hashlib.sha256(
+            f"{item.amount}{password}{init_data['PaymentId']}{terminal_key}".encode()
+        ).hexdigest(),
         "IP": item.ip,
         "CardData": item.card_data,
         "Amount": item.amount,
-        "deviceChannel": "02"
+        "deviceChannel": "02",
     }
     if item.email is not None and len(item.email) > 0:
         confirm_payment["SendEmail"] = True
         confirm_payment["InfoEmail"] = item.email
-    confirm_payment_data = requests.post("https://securepay.tinkoff.ru/v2/FinishAuthorize",
-                                                    json=confirm_payment, headers=content_type).json()
-    token = hashlib.sha256(f"{item.amount}{password}{init_data['PaymentId']}{terminal_key}".encode()).hexdigest()
-    await HistoryPaymentTink.create(id_order=order_id, amount=item.amount, id_user=request.user, ip=item.ip,
-                                    card_data=item.card_data, token=token, id_payment=init_data["PaymentId"])
+    confirm_payment_data = requests.post(
+        "https://securepay.tinkoff.ru/v2/FinishAuthorize",
+        json=confirm_payment,
+        headers=content_type,
+    ).json()
+    token = hashlib.sha256(
+        f"{item.amount}{password}{init_data['PaymentId']}{terminal_key}".encode()
+    ).hexdigest()
+    await HistoryPaymentTink.create(
+        id_order=order_id,
+        amount=item.amount,
+        id_user=request.user,
+        ip=item.ip,
+        card_data=item.card_data,
+        token=token,
+        id_payment=init_data["PaymentId"],
+    )
     if confirm_payment_data["Success"] is False:
         print(confirm_payment_data)
         raise HTTPException(507, detail=confirm_payment_data)
-    return JSONResponse({"status": True,
-                         "message": "Success!",
-                         "is3DsVersion2": True if check_3ds_data["Version"] == "2.1.0" else False \
-                             if check_3ds_data["Version"] == "1.0.0" else None,
-                         "serverTransId": check_3ds_data["TdsServerTransID"] if "TdsServerTransID" in check_3ds_data \
-                                                        and check_3ds_data["TdsServerTransID"] is not None else None,
-                         "acsUrl": confirm_payment_data["ACSUrl"],
-                         "md": confirm_payment_data["MD"],
-                         "paReq": confirm_payment_data["PaReq"],
-                         "TerminalKey": terminal_key,
-                         "acsTransId": None if "AcsTransId" not in confirm_payment_data or \
-                                    confirm_payment_data["AcsTransId"] is None else confirm_payment_data["AcsTransId"]})
+    return JSONResponse(
+        {
+            "status": True,
+            "message": "Success!",
+            "is3DsVersion2": (
+                True
+                if check_3ds_data["Version"] == "2.1.0"
+                else False if check_3ds_data["Version"] == "1.0.0" else None
+            ),
+            "serverTransId": (
+                check_3ds_data["TdsServerTransID"]
+                if "TdsServerTransID" in check_3ds_data
+                and check_3ds_data["TdsServerTransID"] is not None
+                else None
+            ),
+            "acsUrl": confirm_payment_data["ACSUrl"],
+            "md": confirm_payment_data["MD"],
+            "paReq": confirm_payment_data["PaReq"],
+            "TerminalKey": terminal_key,
+            "acsTransId": (
+                None
+                if "AcsTransId" not in confirm_payment_data
+                or confirm_payment_data["AcsTransId"] is None
+                else confirm_payment_data["AcsTransId"]
+            ),
+        }
+    )
+
 
 
