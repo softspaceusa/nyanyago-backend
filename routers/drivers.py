@@ -160,17 +160,30 @@ async def send_payment_requests(request: Request, item: SendPaymentRequest):
                                           schedule_not_found,
                                           access_forbidden]))
 async def get_schedule(request: Request, limit: Union[int, None] = 30, offset: Union[int, None] = 0):
+    """
+    Эндпоинт для получения всех расписаний
+
+    Args:
+        request (Request): Объект запроса
+        limit (Union[int, None], optional): Количество расписаний. По умолчанию 30.
+        offset (Union[int, None], optional): Смещение. По умолчанию к 0.
+
+    Returns:
+        JSONResponse: Ответ с расписаниями
+    """
     schedules = await DataSchedule.filter(isActive=False).limit(limit).offset(offset).all().values \
         ("id", "id_user", "title", "description", "children_count",
          "id_tariff", "week_days", "duration")
+    valid_schedules = []
     for schedule in schedules:
+        stop = False  # Флаг - если он True, значит с маршрутами в расписании что-то не так => расписание не выводится
         photo = await UsersUserPhoto.filter(id_user=schedule["id"]).first().values()
         schedule["user"] = {
             "id_user": schedule["id_user"],
             "name": (await UsersUser.filter(id=schedule["id_user"]).first().values())["name"],
             "photo_path": not_user_photo if photo is None or len(photo) == 0 else photo["photo_path"]
         }
-        schedule["week_days"] = [int(x) for x in schedule["week_days"].split(";")]
+        schedule["week_days"] = [int(x) for x in schedule["week_days"].split(";") if x.isdigit()]
         other_parametrs = await DataScheduleOtherParametrs.filter(id_schedule=schedule["id"],
                                                                   isActive=True).order_by("id").all().values()
         other_parametrs_data = []
@@ -184,46 +197,56 @@ async def get_schedule(request: Request, limit: Union[int, None] = 30, offset: U
 
         all_price = 0
         for road in roads:
-            road["type_drive"] = [int(x) for x in road["type_drive"].split(";")]
-            addresses = await DataScheduleRoadAddress.filter(id_schedule_road=road["id"]).order_by("id").all().values()
-            data_addresses = []
-            price_road = road.get("amount", -1)
+            try:
+                road["type_drive"] = [int(x) for x in road["type_drive"].split(";") if x.isdigit()]
+                addresses = await DataScheduleRoadAddress.filter(id_schedule_road=road["id"]).order_by("id").all().values()
+                data_addresses = []
+                price_road = road.get("amount", -1)
 
-            for address in addresses:
-                address_data = {
-                    "from_address": {
-                        "address": address["from_address"],
-                        "location": {
-                            "longitude": address["from_lon"],
-                            "latitude": address["from_lat"]
-                        }
-                    },
-                    "to_address": {
-                        "address": address["to_address"],
-                        "location": {
-                            "longitude": address["to_lon"],
-                            "latitude": address["to_lat"]
+                for address in addresses:
+                    address_data = {
+                        "from_address": {
+                            "address": address["from_address"],
+                            "location": {
+                                "longitude": address["from_lon"],
+                                "latitude": address["from_lat"]
+                            }
+                        },
+                        "to_address": {
+                            "address": address["to_address"],
+                            "location": {
+                                "longitude": address["to_lon"],
+                                "latitude": address["to_lat"]
+                            }
                         }
                     }
-                }
-                data_addresses.append(address_data)
+                    data_addresses.append(address_data)
 
-            road["addresses"] = data_addresses
-            road["salary"] = round(float(price_road), 2)
-            all_price += price_road
+                road["addresses"] = data_addresses
+                road["salary"] = round(float(price_road), 2)
+                print(price_road, road["id"])
+                all_price += price_road
 
-            road.pop("id_schedule", None)
-            road.pop("amount", None)
-            road.pop("isActive", None)
-            road.pop("datetime_create", None)
-
+                road.pop("id_schedule", None)
+                road.pop("amount", None)
+                road.pop("isActive", None)
+                road.pop("datetime_create", None)
+            except Exception as e:
+                print(e)
+                stop = True
+                break
+        if stop:  # Если в расписании что-то не так => расписание не выводится
+            continue
+        if roads is None or len(roads) == 0:  # Если в расписании нет маршрутов => расписание не выводится
+            continue
         schedule["roads"] = roads
         schedule["all_salary"] = round(float(all_price), 2)  # Ensure total salary is float
         del schedule["id_user"]
+        valid_schedules.append(schedule)
 
     return JSONResponse({"status": True,
                          "message": "Success!",
-                         "schedules": schedules}, 200)
+                         "schedules": valid_schedules}, 200)
 
 
 @router.get("/get_my_schedules",

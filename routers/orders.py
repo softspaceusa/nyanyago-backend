@@ -784,6 +784,17 @@ async def delete_schedule_road(request: Request, id: int):
              responses=generate_responses([success_answer,
                                            schedule_not_found]))
 async def create_schedule_road(request: Request, id: int, item: Road):
+    """
+    Эндпоинт для создания нового маршрута для расписания/графика/контракта
+
+    Args:
+        request (Request): Объект запроса
+        id (int): ID расписания
+        item (Road): Данные
+
+    Returns:
+        JSONResponse: JSON-ответ
+    """
     if await DataSchedule.filter(id=id, id_user=request.user, isActive__in=[True, False]).count() == 0:
         print((await DataSchedule.filter(id=id, id_user=request.user, isActive__not=None).count()))
         print((await DataSchedule.filter(id=id, id_user=request.user, isActive__in=[True, False]).count()))
