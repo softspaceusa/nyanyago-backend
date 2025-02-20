@@ -485,6 +485,10 @@ class WantSchedule(BaseModel):
     id_road: List[int]
 
 
+class DeclineRoads(BaseModel):
+    id_road: List[int]
+
+
 class AnswerResponse(BaseModel):
     id_schedule: int
     id_response: int
