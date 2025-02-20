@@ -457,6 +457,8 @@ async def delete_debit_card(request: Request, item: DeleteDebitCard):
 async def start_sbp_payment(request: Request, item: SbpPayment):
     """
     Инициирует процесс оплаты через СБП с использованием Tinkoff API.
+    Затем через некоторое время - следует обратиться к `/add_money` для проверки
+    статуса платежа и начислении средств на баланс клиента.
 
     Args:
         request (Request): HTTP-запрос с данными пользователя.
@@ -722,6 +724,8 @@ async def confirm_payment_3dsV2(request: Request, item: ConfirmPayment):
     """
     Завершает платёж (последовательный шаг после обращения к `/start_payment`).
     Только при версии 3DS 2.x.x.
+    Затем через некоторое время - следует обратиться к `/add_money` для проверки
+    статуса платежа и начислении средств на баланс клиента.
 
     Пример запроса:
         {
@@ -817,6 +821,22 @@ async def confirm_payment_3dsV2(request: Request, item: ConfirmPayment):
 
 @router.post("/add_money", responses=generate_responses([success_answer]))
 async def add_money(request: Request, item: AddMoney):
+    """
+    Добавляет средства на баланс пользователя.
+
+    Пример запроса:
+        {
+            "amount": 100,  // тут уже в рублях
+            "payment_id": 1
+        }
+
+    Args:
+        request (Request): Запрос.
+        item (AddMoney): Данные пользователя: amount, payment_id.
+
+    Returns:
+        JSONResponse: Ответ.
+    """
     content_type = {"Content-Type": "application/json"}
     if (
         await HistoryPaymentTink.filter(
