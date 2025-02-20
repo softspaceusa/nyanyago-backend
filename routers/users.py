@@ -455,16 +455,47 @@ async def delete_debit_card(request: Request, item: DeleteDebitCard):
 
 @router.post("/start_sbp_payment", responses=generate_responses([start_sbp_answer]))
 async def start_sbp_payment(request: Request, item: SbpPayment):
+    """
+    Инициирует процесс оплаты через СБП с использованием Tinkoff API.
+
+    Args:
+        request (Request): HTTP-запрос с данными пользователя.
+        item (SbpPayment): Данные для создания платежа, включая сумму, телефон и email.
+
+    Returns:
+        JSONResponse: Ответ с информацией об успешности операции и ссылкой на оплату.
+
+    Пример запроса:
+    {
+        "amount": 1000,  // Сумма платежа в копейках
+        "email": "user@example.com",
+        "phone": "+79991234567"  // Разрешены только цифры, исключение — первый символ может быть +.
+    }
+
+    Пример ответа:
+    {
+        "status": True,
+        "message": "Success!",
+        "payment": {
+            "amount": 1000,
+            "PaymentId": "123456789",
+            "payment_url": "https://qr.nspk.ru/AS1000670LSS7DN18SJQDNP4B05KLJL2?type=01&bank=100000000001&sum=10000&cur=RUB&crc=C08B"
+        }
+    }
+
+    Raises:
+        HTTPException: Выбрасывается при ошибке инициализации платежа с кодом 505 и деталями ошибки.
+    """
     content_type = {"Content-Type": "application/json"}
     order_id = hashlib.md5(
         str(("%032x" % random.getrandbits(128)) + str(request.user)).encode()
     ).hexdigest()
-    data = {
+    data = {  # TODO: Вероятно - тут должен быть обязательный параметр `token` - подпись запроса
         "TerminalKey": "1692261610441",
-        "Amount": item.amount,
-        "OrderId": order_id,
-        "Description": "Пополнение баланса аккаунта АвтоНяня",
-        "PayType": "O",
+        "Amount": item.amount,  # Сумма в копейках. Например, 3 руб. 12коп. — это число 312.
+        "OrderId": order_id,  # Идентификатор заказа в системе мерчанта. Должен быть уникальным для каждой операции.
+        "Description": "Пополнение баланса аккаунта АвтоНяня",  # Описание заказа. Значение параметра будет отображено на платежной форме.
+        "PayType": "O",  # Определяет тип проведения платежа: O — одностадийная оплата
         "DATA": {
             "Phone": item.phone,
             "Email": item.email,
@@ -477,7 +508,7 @@ async def start_sbp_payment(request: Request, item: SbpPayment):
         },
     }
     init_data = requests.post(
-        "https://securepay.tinkoff.ru/v2/Init", json=data, headers=content_type
+        "https://securepay.tinkoff.ru/v2/Init", json=data, headers=content_type  # Метод инициирует платежную сессию.
     ).json()
     if init_data["Success"] is False:
         print(init_data)
@@ -491,7 +522,7 @@ async def start_sbp_payment(request: Request, item: SbpPayment):
         ).hexdigest(),
     }
     sbp = requests.post(
-        "https://securepay.tinkoff.ru/v2/GetQr", headers=content_type, json=qr_data
+        "https://securepay.tinkoff.ru/v2/GetQr", headers=content_type, json=qr_data  # Метод регистрирует QR и возвращает информацию о нем. Вызывается после метода Init.
     )
     await HistoryPaymentTink.create(
         id_user=request.user,
@@ -514,6 +545,42 @@ async def start_sbp_payment(request: Request, item: SbpPayment):
 
 @router.post("/start_payment")
 async def generate_url_for_payment(request: Request, item: UserDataPayment):
+    """
+    Генерирует ссылку для проведения платежа через Tinkoff, проверяет версию 3DS.
+    Если версия 3DS - не 2.x.x, то сразу инициализирует оплату (вроде не наш случай).
+    Если версия 3DS - 2.x.x, то в дальнейшем потребуется завершить оплату через `/confirm_payment`.
+
+    Пример запроса:
+        {
+          "ip": "02a3:06f0:0004:0000:0000:0000:0000:0edf",  // (опционально)
+          "amount": 50000,
+          "card_data": "U5jDbwqOVx+2vDApx...zRZ87GdWeY8wgg==",  // в зашифрованном виде
+          "email": "user@example.com",
+          "phone": "+79991234567",
+          "recurrent": "true"  // (опционально)
+        }
+
+    Пример ответа при версии 3DS 2.x.x (скорее всего такая версия и будет):
+        {
+          "is3DsVersion2": True,
+          "TerminalKey": "1692261610441",
+          "PaymentId": 10063,
+          "serverTransId": "17d3791b-5cfa-4318-bc23-3d949e8c4b7e",  # Уникальный идентификатор транзакции, который генерируется 3DS-Server.
+          "ThreeDSMethodURL": "https://acs.vendorcert.mirconnect.ru/ds/6300",  # Дополнительный параметр для 3DS второй версии, который позволяет пройти этап по сбору данных браузера ACS-ом.
+        }
+
+    Args:
+        request (Request): Объект запроса, содержащий информацию о пользователе.
+        item (UserDataPayment): Данные для оплаты, включая сумму, email, телефон, IP-адрес и зашифрованные данные карты.
+
+    Returns:
+        JSONResponse: JSON-ответ с информацией о статусе операции, параметрами для 3DS-аутентификации и ссылкой на ACS.
+
+    Raises:
+        HTTPException: В случае ошибки на любом этапе процесса оплаты.
+    """
+
+
     print(item.__dict__)
     content_type = {"Content-Type": "application/json"}
     order_id = hashlib.md5(
@@ -521,13 +588,13 @@ async def generate_url_for_payment(request: Request, item: UserDataPayment):
     ).hexdigest()
     data = {
         "TerminalKey": "1692261610441",
-        "Amount": item.amount,
-        "OrderId": order_id,
-        "Description": "Пополнение баланса аккаунта АвтоНяня",
-        "SuccessURL": f"https://nynyago.ru/api/v1.0/payments/payments_success?order_id={order_id}",
-        "NotificationURL": f"https://nynyago.ru/api/v1.0/payments/payments_status/{order_id}",
-        "FailURL": "https://nynyago.ru/api/v1.0/payments/payments_unsuccessful?order_id={order_id}",
-        "PayType": "O",
+        "Amount": item.amount,  # Сумма в копейках. Например, 3 руб. 12коп. — это число 312.
+        "OrderId": order_id,  # Идентификатор заказа в системе мерчанта. Должен быть уникальным для каждой операции.
+        "Description": "Пополнение баланса аккаунта АвтоНяня",  # Описание заказа. Значение параметра будет отображено на платежной форме.
+        "SuccessURL": f"https://nynyago.ru/api/v1.0/payments/payments_success?order_id={order_id}",  # URL на веб-сайте мерчанта, куда будет переведен клиент в случае успешной оплаты — настраивается в личном кабинете. Если параметр:
+        "NotificationURL": f"https://nynyago.ru/api/v1.0/payments/payments_status/{order_id}",  # URL на веб-сайте мерчанта, куда будет отправлен POST-запрос о статусе выполнения вызываемых методов — настраивается в личном кабинете
+        "FailURL": "https://nynyago.ru/api/v1.0/payments/payments_unsuccessful?order_id={order_id}",  # URL на веб-сайте мерчанта, куда будет переведен клиент в случае неуспешной оплаты — настраивается в личном кабинете. Если параметр:
+        "PayType": "O",  # Определяет тип проведения платежа: O — одностадийная оплата
         "DATA": {
             "Phone": item.phone,
             "Email": item.email,
@@ -547,14 +614,14 @@ async def generate_url_for_payment(request: Request, item: UserDataPayment):
     check_data = {
         "PaymentId": init_data["PaymentId"],
         "TerminalKey": "1692261610441",
-        "CardData": item.card_data,
+        "CardData": item.card_data,  # Зашифрованные данные карты. Например: "U5jDbwqOVx+2vDApx...zRZ87GdWeY8wgg=="
         "Token": hashlib.sha256(
             f"{item.amount}cz9mvi6nawsft86w"
             f"{init_data['PaymentId']}1692261610441".encode()
         ).hexdigest(),
     }
     check_3ds_data = requests.post(
-        "https://securepay.tinkoff.ru/v2/Check3dsVersion",
+        "https://securepay.tinkoff.ru/v2/Check3dsVersion",  # Проверяет поддерживаемую версию 3DS-протокола по карточным данным из входящих параметров.
         json=check_data,
         headers=content_type,
     ).json()
@@ -575,15 +642,15 @@ async def generate_url_for_payment(request: Request, item: UserDataPayment):
                 f"{item.amount}cz9mvi6nawsft86w{init_data['PaymentId']}"
                 f"1692261610441".encode()
             ).hexdigest(),
-            TdsServerTransID=check_3ds_data["TdsServerTransID"],
+            TdsServerTransID=check_3ds_data["TdsServerTransID"],  # Уникальный идентификатор транзакции, который генерируется 3DS-Server.
         )
         return JSONResponse(
             {
                 "is3DsVersion2": True,
                 "TerminalKey": "1692261610441",
                 "PaymentId": init_data["PaymentId"],
-                "serverTransId": check_3ds_data["TdsServerTransID"],
-                "ThreeDSMethodURL": check_3ds_data["ThreeDSMethodURL"],
+                "serverTransId": check_3ds_data["TdsServerTransID"],  # Уникальный идентификатор транзакции, который генерируется 3DS-Server.
+                "ThreeDSMethodURL": check_3ds_data["ThreeDSMethodURL"],  # Дополнительный параметр для 3DS второй версии, который позволяет пройти этап по сбору данных браузера ACS-ом.
             }
         )
     confirm_payment = {
@@ -593,16 +660,16 @@ async def generate_url_for_payment(request: Request, item: UserDataPayment):
             f"{item.amount}cz9mvi6nawsft86w"
             f"{init_data['PaymentId']}1692261610441".encode()
         ).hexdigest(),
-        "IP": item.ip,
+        "IP": item.ip,  # IP-адрес клиента. Обязательный параметр для 3DS второй версии. DS платежной системы требует передавать данный адрес в полном формате, без каких-либо сокращений — 8 групп по 4 символа.
         "CardData": item.card_data,
         "Amount": item.amount,
-        "deviceChannel": "02",
+        "deviceChannel": "02",  # Канал устройства. 02 - Browser.
     }
     if item.email is not None and len(item.email) > 0:
         confirm_payment["SendEmail"] = True
         confirm_payment["InfoEmail"] = item.email
     confirm_payment_data = requests.post(
-        "https://securepay.tinkoff.ru/v2/FinishAuthorize",
+        "https://securepay.tinkoff.ru/v2/FinishAuthorize",  # Метод подтверждает платеж передачей реквизитов. При одностадийной оплате — списывает средства с карты клиента.
         json=confirm_payment,
         headers=content_type,
     ).json()
@@ -630,17 +697,17 @@ async def generate_url_for_payment(request: Request, item: UserDataPayment):
                 if check_3ds_data["Version"] == "2.1.0"
                 else False if check_3ds_data["Version"] == "1.0.0" else None
             ),
-            "serverTransId": (
+            "serverTransId": (  # Уникальный идентификатор транзакции, который генерируется 3DS-Server.
                 check_3ds_data["TdsServerTransID"]
                 if "TdsServerTransID" in check_3ds_data
                 and check_3ds_data["TdsServerTransID"] is not None
                 else None
             ),
-            "acsUrl": confirm_payment_data["ACSUrl"],
-            "md": confirm_payment_data["MD"],
-            "paReq": confirm_payment_data["PaReq"],
+            "acsUrl": confirm_payment_data["ACSUrl"],  # Если в ответе метода FinishAuthorize возвращается статус 3DS_CHECKING, мерчанту нужно сформировать запрос на URL ACS банка, который выпустил карту — параметр ACSUrl в ответе, и вместе с этим перенаправить клиента на эту же страницу ACSUrl для прохождения 3DS.
+            "md": confirm_payment_data["MD"],  # Уникальный идентификатор транзакции в системе Т‑Кассы.
+            "paReq": confirm_payment_data["PaReq"],  # Шифрованная строка, содержащая результаты 3-D Secure аутентификации. Возвращается в ответе от ACS.
             "TerminalKey": "1692261610441",
-            "acsTransId": (
+            "acsTransId": (  # Идентификатор транзакции, присвоенный ACS, который вернулся в ответе FinishAuthorize. Может и не быть...
                 None
                 if "AcsTransId" not in confirm_payment_data
                 or confirm_payment_data["AcsTransId"] is None
@@ -652,6 +719,24 @@ async def generate_url_for_payment(request: Request, item: UserDataPayment):
 
 @router.post("/confirm_payment")
 async def confirm_payment_3dsV2(request: Request, item: ConfirmPayment):
+    """
+    Завершает платёж (последовательный шаг после обращения к `/start_payment`).
+    Только при версии 3DS 2.x.x.
+
+    Пример запроса:
+        {
+            "PaymentId": 1, // Уникальный идентификатор транзакции, который возвращается из `/start_payment`.
+            "DATA": {}, // JSON-объект, который содержит дополнительные параметры в виде ключ:значение. Эти параметры будут переданы на страницу оплаты
+            "email": "example@gmail.com"
+        }
+    Args:
+        request (Request): Запрос.
+        item (ConfirmPayment): Данные пользователя: PaymentId, DATA, email.
+
+    Returns:
+        JSONResponse: Ответ.
+    """
+
     content_type = {"Content-Type": "application/json"}
     data = (
         await WaitDataPaymentTink.filter(
@@ -754,7 +839,7 @@ async def add_money(request: Request, item: AddMoney):
         "Token": pay["token"],
     }
     x = requests.post(
-        "https://securepay.tinkoff.ru/v2/GetState", json=data, headers=content_type
+        "https://securepay.tinkoff.ru/v2/GetState", json=data, headers=content_type  # Метод возвращает статус платежа.
     ).json()
     print(x)
     if x["Status"] not in ["CONFIRMING", "CONFIRMED"]:
@@ -778,6 +863,9 @@ async def add_money(request: Request, item: AddMoney):
 
 @router.post("/start-payment", responses=generate_responses([success_answer]))
 async def start_tinkoff_payment(request: Request, item: StartPayment):
+    """
+    Походу deprecated
+    """
     print(item.__dict__)
     terminal_key = "1692261610441"
     password = "cz9mvi6nawsft86w"
@@ -804,7 +892,7 @@ async def start_tinkoff_payment(request: Request, item: StartPayment):
             "Token": token,
         }
         new_client = requests.post(
-            "https://securepay.tinkoff.ru/v2/AddCustomer",
+            "https://securepay.tinkoff.ru/v2/AddCustomer",  # Регистрирует клиента в связке с терминалом.
             json=client,
             headers=content_type,
         )
