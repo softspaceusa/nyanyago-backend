@@ -430,8 +430,7 @@ async def get_order_data(order):
         }
         addresses = await DataOrderAddresses.filter(id_order=order["id"]).order_by("id").all().values()
         for each in addresses:
-            _, duration = await get_time_drive(each["from_lat"], each["from_lon"],
-                                               each["to_lat"], each["to_lon"], 0)
+            _, duration = await get_distance_and_duration({"lat": each["from_lat"], "lng": each["from_lon"]}, {"lat": each["to_lat"], "lng": each["to_lon"]})
             if "addresses" not in answer:
                 answer["addresses"] = [{"from": each["from_address"], "isFinish": each["isFinish"],
                                         "to": each["to_address"], "from_lat": each["from_lat"],
