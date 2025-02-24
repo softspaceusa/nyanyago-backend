@@ -1129,6 +1129,10 @@ async def get_drive_info(id_order: int):
         "from_address", "to_address", "from_lat", "from_lon", "to_lat", "to_lon", "isFinish"
     )
 
+    for each in addresses:
+        _, duration = await get_distance_and_duration({"lat": each["from_lat"], "lng": each["from_lon"]}, {"lat": each["to_lat"], "lng": each["to_lon"]})
+        each["duration"] = duration
+
     # Получаем основную информацию о поездке
     order_info = await DataOrderInfo.filter(id_order=id_order).first()
 
