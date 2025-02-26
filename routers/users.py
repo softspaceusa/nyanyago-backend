@@ -5,6 +5,7 @@ import json
 import random
 import uuid
 from pydantic.json_schema import SkipJsonSchema
+from bs4 import BeautifulSoup
 
 import requests
 
@@ -610,6 +611,7 @@ async def generate_url_for_payment(request: Request, item: UserDataPayment):
     init_data = requests.post(
         "https://securepay.tinkoff.ru/v2/Init", json=data, headers=content_type
     ).json()
+    logger.info(init_data)
     if init_data["Success"] is False:
         print(init_data)
         raise HTTPException(505, detail=init_data)
@@ -627,6 +629,7 @@ async def generate_url_for_payment(request: Request, item: UserDataPayment):
         json=check_data,
         headers=content_type,
     ).json()
+    logger.info(check_3ds_data)
     if item.ip is None:
         item.ip = "02a3:06f0:0004:0000:0000:0000:0000:0edf"
     if check_3ds_data["Success"] is False:
@@ -675,6 +678,7 @@ async def generate_url_for_payment(request: Request, item: UserDataPayment):
         json=confirm_payment,
         headers=content_type,
     ).json()
+    logger.info(confirm_payment_data)
     token = hashlib.sha256(
         f"{item.amount}cz9mvi6nawsft86w{init_data['PaymentId']}1692261610441".encode()
     ).hexdigest()
@@ -690,10 +694,54 @@ async def generate_url_for_payment(request: Request, item: UserDataPayment):
     if confirm_payment_data["Success"] is False:
         print(confirm_payment_data)
         raise HTTPException(507, detail=confirm_payment_data)
+    if confirm_payment_data["Status"] == "3DS_CHECKING":
+        logger.info("3DS_CHECKING")
+        acs_url = confirm_payment_data["ACSUrl"]
+        headers = {
+            "Content-Type": "application/x-www-form-urlencoded"
+        }
+        form_data = {
+            "TermUrl": "https://nyanyago.ru/3ds-callback",
+            "MD": confirm_payment_data["MD"],
+            "PaReq": confirm_payment_data["PaReq"]
+        }
+        acs_request = requests.post(acs_url, data=form_data, headers=headers)
+        logger.info(f"ACS Request Status Code: {acs_request.status_code}")
+        return JSONResponse(
+            {
+                "status": True,
+                "message": "Success!",
+                "PaymentId": init_data["PaymentId"],
+                "HTML": acs_request.text,
+                "is3DsVersion2": (
+                    True
+                    if check_3ds_data["Version"] == "2.1.0"
+                    else False if check_3ds_data["Version"] == "1.0.0" else None
+                ),
+                "serverTransId": (
+                    check_3ds_data["TdsServerTransID"]
+                    if "TdsServerTransID" in check_3ds_data
+                       and check_3ds_data["TdsServerTransID"] is not None
+                    else None
+                ),
+                "acsUrl": confirm_payment_data["ACSUrl"],
+                "md": confirm_payment_data["MD"],
+                "paReq": confirm_payment_data["PaReq"],
+                "TerminalKey": "1692261610441",
+                "acsTransId": (
+                    None
+                    if "AcsTransId" not in confirm_payment_data
+                       or confirm_payment_data["AcsTransId"] is None
+                    else confirm_payment_data["AcsTransId"]
+                ),
+            }
+        )
+
     return JSONResponse(
         {
             "status": True,
             "message": "Success!",
+            "PaymentId": init_data["PaymentId"],
             "is3DsVersion2": (
                 True
                 if check_3ds_data["Version"] == "2.1.0"
