@@ -365,10 +365,10 @@ async def want_schedule_requests(request: Request, item: WantSchedule):
     Returns:
         JSONResponse: Ответ в формате JSON.
     """
-    if await DataSchedule.filter(id=item.id_schedule, isActive=False).count() != 1:
+    if await DataSchedule.filter(id=item.id_schedule).count() != 1:
         return schedule_not_found
     schedule, req = (
-        await DataSchedule.filter(id=item.id_schedule, isActive=False).first().values(),
+        await DataSchedule.filter(id=item.id_schedule).first().values(),
         {},
     )
     for each in item.id_road:
@@ -385,7 +385,7 @@ async def want_schedule_requests(request: Request, item: WantSchedule):
             )
         if (
             await DataScheduleRoadDriver.filter(
-                id_schedule_road=each, isRepeat=True
+                id_schedule_road=each
             ).count()
             != 0
         ):
@@ -443,7 +443,7 @@ async def want_schedule_requests(request: Request, item: WantSchedule):
         print(traceback.format_exc())
 
     schedule = (
-        await DataSchedule.filter(id=item.id_schedule, isActive=False).first().values()
+        await DataSchedule.filter(id=item.id_schedule).first().values()
     )
     schedule.pop("datetime_create", None)
     roads = []
