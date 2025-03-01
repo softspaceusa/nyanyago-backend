@@ -1604,6 +1604,11 @@ async def answer_schedule_responses(request: Request, item: AnswerResponse):
     )
     if item.flag is True:
         await DataSchedule.filter(id=item.id_schedule).update(isActive=True)
+        roads_info = await DataScheduleRoad.filter(id__in=roads).values("id", "title",
+                                                                        "start_time",
+                                                                        "end_time")
+        roads_info = [{**road} for road in roads_info]
+
         try:
             await sendPush(
                 fbid["fbid"],
@@ -1614,6 +1619,7 @@ async def answer_schedule_responses(request: Request, item: AnswerResponse):
                     "action": "order_request_success",
                     "id_request": item.id_response,
                     "id_schedule": item.id_schedule,
+                    "roads": roads_info,
                 },
             )
             await HistoryNotification.create(
