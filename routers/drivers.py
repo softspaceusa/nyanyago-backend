@@ -257,7 +257,7 @@ async def get_schedule(request: Request, limit: Union[int, None] = 30, offset: U
                                            schedule_not_found,
                                            access_forbidden]))
 async def get_my_schedules(request: Request, limit: Union[int, None] = 30, offset: Union[int, None] = 0):
-    # TODO: Это не должно работать...
+    # TODO: Это не должно работать... См. get_driver_roads
     data = await DataScheduleRoadDriver.filter(id_driver=request.user, isActive=True, isRepeat=True).all().values()
     schedules = await DataScheduleRoadDriver.filter(isActive=True).limit(limit).offset(offset).all().values\
                        ("id", "id_user", "title", "description", "children_count",
@@ -314,6 +314,14 @@ async def get_my_schedules(request: Request, limit: Union[int, None] = 30, offse
     return JSONResponse({"status": True,
                          "message": "Success!",
                          "schedules": schedules}, 200)
+
+
+@router.get("/get_driver_roads")
+async def get_driver_roads(request: Request, limit: Union[int, None] = 30, offset: Union[int, None] = 0):
+    data = await DataScheduleRoadDriver.filter(id_driver=request.user, isActive=True).limit(limit).offset(offset).all().values()
+    return JSONResponse({"status": True,
+                         "message": "Success!",
+                         "roads_id": [x["id_schedule_road"] for x in data]}, 200)
 
 
 @router.get("/get_today_schedule",

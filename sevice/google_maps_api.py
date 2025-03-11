@@ -50,6 +50,8 @@ async def get_distance_and_duration(
             distance = element["distance"]["value"]
             duration = element["duration"]["value"]
             return distance, duration
+        elif element["status"] == "ZERO_RESULTS":
+            return 0, 0
         else:
             raise ValueError(f"Ошибка: {element['status']}")
     else:

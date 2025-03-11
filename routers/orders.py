@@ -1053,13 +1053,6 @@ async def update_schedule_road(request: Request, item: UpdateRoad):
     road = await DataScheduleRoad.filter(id=item.id, isActive=True).first().values()
     if road is None or len(road) == 0:
         return schedule_not_found
-    if (
-        await DataSchedule.filter(
-            id=road["id_schedule"], id_user=request.user, isActive=True
-        ).count()
-        == 0
-    ):
-        return schedule_not_found
     if item.title is not None and len(item.title) > 0 and road["title"] != item.title:
         await DataScheduleRoad.filter(id=item.id).update(title=item.title)
     if (
@@ -1151,11 +1144,11 @@ async def update_schedule_road(request: Request, item: UpdateRoad):
                 to_lat=to_lat,
             )
 
-    if 1 in list(map(int, item.type_drive)):
-        total_price *= 2
+        if 1 in list(map(int, item.type_drive)):
+            total_price *= 2
 
-    await DataScheduleRoad.filter(id=item.id).update(
-        amount=total_price)
+        await DataScheduleRoad.filter(id=item.id).update(
+            amount=total_price)
 
     total_price_from_db = await DataScheduleRoad.filter(id=item.id).first().values("amount")
 
@@ -1166,7 +1159,7 @@ async def update_schedule_road(request: Request, item: UpdateRoad):
                          "updated_road": {
                              "price": total_price_from_db,
                              "id": item.id,
-                             "road_addresses": all_addresses
+                             "road_addresses_(updated)": all_addresses
                          }
                          }, 200)
 
@@ -1178,18 +1171,17 @@ async def get_schedule_road(id: int):
     road = await DataScheduleRoad.filter(id=id, isActive=True).first().values()
     if road is None or len(road) == 0:
         return schedule_not_found
-    if await DataSchedule.filter(id=road["id_schedule"], isActive__not=None).count() == 0:
+    if await DataSchedule.filter(id=road["id_schedule"]).count() == 0:
         return schedule_not_found
-    road = await DataScheduleRoad.filter(id_schedule=id, isActive=True).order_by("id").first().values()
-    road["type_drive"] = [int(x) for x in road["type_drive"].split(";")]
+    road["type_drive"] = [int(x) for x in road["type_drive"].split(";") if x.isdigit()]
     addresses = await DataScheduleRoadAddress.filter(id_schedule_road=road["id"]).order_by("id").all().values()
     data_addresses = []
-    price_road = 0
+    price_road = 0.0
     schedule = await DataSchedule.filter(id=road["id_schedule"]).first().values("id_tariff")
     tariff = (await DataCarTariff.filter(id=schedule["id_tariff"]).first().values())["amount"]
     for address in addresses:
-        info, _ = await get_time_drive(address["from_lat"], address["from_lon"],
-                                       address["to_lat"], address["to_lon"], tariff)
+        distance, time = await get_distance_and_duration({"lat": address["from_lat"], "lng": address["from_lon"]}, {"lat": address["to_lat"], "lng": address["to_lon"]})
+        info = get_total_cost_of_the_trip(M=tariff, S2=distance, To=time)
         price_road += info
         address_data = {
                             "from_address": {
@@ -1210,6 +1202,7 @@ async def get_schedule_road(id: int):
         data_addresses.append(address_data)
     road["addresses"] = data_addresses
     road["amount"] = price_road
+    await DataScheduleRoad.filter(id=id, isActive=True).update(amount=price_road)
     del road["id_schedule"]
     del road["isActive"]
     del road["datetime_create"]
