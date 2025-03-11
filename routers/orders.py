@@ -1177,7 +1177,7 @@ async def get_schedule_road(id: int):
     addresses = await DataScheduleRoadAddress.filter(id_schedule_road=road["id"]).order_by("id").all().values()
     data_addresses = []
     price_road = 0.0
-    schedule = await DataSchedule.filter(id=road["id_schedule"]).first().values("id_tariff")
+    schedule = await DataSchedule.filter(id=road["id_schedule"]).first().values()
     tariff = (await DataCarTariff.filter(id=schedule["id_tariff"]).first().values())["amount"]
     for address in addresses:
         distance, time = await get_distance_and_duration({"lat": address["from_lat"], "lng": address["from_lon"]}, {"lat": address["to_lat"], "lng": address["to_lon"]})
@@ -1202,6 +1202,8 @@ async def get_schedule_road(id: int):
         data_addresses.append(address_data)
     road["addresses"] = data_addresses
     road["amount"] = price_road
+    road["tariff"] = schedule["id_tariff"]
+    road["other_parametrs"] = await DataScheduleOtherParametrs.filter(id_schedule=road["id_schedule"]).values('id_other_parametr', 'amount')
     await DataScheduleRoad.filter(id=id, isActive=True).update(amount=price_road)
     del road["id_schedule"]
     del road["isActive"]
@@ -1298,6 +1300,9 @@ async def get_current_order_data(request: Request):
              responses=generate_responses([start_current_drive,
                                            you_have_active_drive]))
 async def start_one_current_drive(request: Request, item: CurrentDrive):
+    """
+    Вроде Deprecated
+    """
     if await DataOrder.filter(id_status__not=11, id_user=request.user, isActive=True).count() > 0 or\
             await WaitDataSearchDriver.filter(id_user=request.user).count() > 0:
         return you_have_active_drive
@@ -1771,18 +1776,12 @@ async def get_driver_token(request: Request):
 @router.get("/get_client_token")
 async def get_client_token(request: Request):
     try:
-        user_orders = await UsersUserOrder.filter(id_user=request.user).all()
-        if not user_orders:
+        user_order = await UsersUserOrder.filter(id_user=request.user).order_by("-id").first().values('id_order', 'token')
+        is_active = await DataOrder.filter(id=user_order['id_order']).first().values('isActive')
+        if not user_order:
             raise HTTPException(status_code=404, detail="Client tokens not found")
 
-        result = []
-        for user_order in user_orders:
-            result.append({
-                "websocket_token": user_order.token,
-                "id_order": user_order.id_order
-            })
-
-        return JSONResponse({"orders": result})
+        return JSONResponse({"order": user_order, "is_active": is_active.get('isActive')})
 
     except DoesNotExist:
         raise HTTPException(status_code=404, detail="Client not found")
