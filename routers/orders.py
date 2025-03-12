@@ -555,9 +555,9 @@ async def get_schedule(request: Request):
                 .all()
                 .values()
             )
-
             price_road = road.get("amount", -1)
-            all_price += price_road
+            if price_road is not None:
+                all_price += price_road
             data_addresses = []
             for address in addresses:
                 from_lat = address.get("from_lat")
@@ -577,7 +577,7 @@ async def get_schedule(request: Request):
                 }
                 data_addresses.append(address_data)
 
-            road["amount"] = round(float(price_road), 2)
+            road["amount"] = round(float(price_road), 2) if price_road is not None else 0
             road["addresses"] = data_addresses
 
             road.pop("id_schedule", None)
