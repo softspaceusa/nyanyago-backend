@@ -252,6 +252,232 @@ async def get_schedule(request: Request, limit: Union[int, None] = 30, offset: U
                          "schedules": valid_schedules}, 200)
 
 
+@router.get("/get_full_roads_info")
+async def get_full_roads_info(request: Request,
+                              road_ids: str):  # road_ids как строка вида "1,2,3"
+    """
+    Эндпоинт для получения информации о конкретных дорогах и их расписаниях
+
+    Example:
+
+        Пример выходных данных:
+
+        {
+          "status": true,
+          "message": "Success!",
+          "schedules": [
+            {
+              "id": 19,
+              "title": "тест",
+              "description": "",
+              "children_count": 4,
+              "id_tariff": 3,
+              "week_days": [
+                1
+              ],
+              "duration": 7,
+              "user": {
+                "id_user": 21,
+                "name": "Максим",
+                "photo_path": "https://nyanyago.ru/api/v1.0/files/not_user_photo.png"
+              },
+              "other_parametrs": [],
+              "roads": [
+                {
+                  "id": 43,
+                  "type_drive": [
+                    0
+                  ],
+                  "addresses": [
+                    {
+                      "from_address": {
+                        "address": "Россия",
+                        "location": {
+                          "longitude": 105.31875610351562,
+                          "latitude": 61.524009704589844
+                        }
+                      },
+                      "to_address": {
+                        "address": "Россия",
+                        "location": {
+                          "longitude": 105.31875610351562,
+                          "latitude": 61.524009704589844
+                        }
+                      }
+                    }
+                  ],
+                  "salary": 355.35
+                },
+                {
+                  "id": 45,
+                  "type_drive": [
+                    0
+                  ],
+                  "addresses": [
+                    {
+                      "from_address": {
+                        "address": "Лесной, Свердловская обл., Россия",
+                        "location": {
+                          "longitude": 59.790401458740234,
+                          "latitude": 58.63566589355469
+                        }
+                      },
+                      "to_address": {
+                        "address": "Плёс, Ивановская обл., Россия",
+                        "location": {
+                          "longitude": 41.512271881103516,
+                          "latitude": 57.46049499511719
+                        }
+                      }
+                    }
+                  ],
+                  "salary": 150
+                }
+              ],
+              "all_salary": 505.35
+            },
+          ]
+        }
+
+    Args:
+        request (Request): Объект запроса
+        road_ids (str): Строка с ID дорог, разделенных запятыми (например, "1,2,3")
+
+    Returns:
+        JSONResponse: Ответ с информацией о дорогах и их расписаниях
+    """
+    try:
+        # Преобразуем строку road_ids в список целых чисел
+        road_id_list = [int(x) for x in road_ids.split(",") if x.isdigit()]
+        if not road_id_list:
+            return JSONResponse(
+                {"status": False, "message": "No valid road IDs provided"}, 400)
+
+        # Получаем все дороги по указанным ID (без фильтра isActive)
+        roads = await DataScheduleRoad.filter(id__in=road_id_list).order_by(
+            "id").all().values()
+        if not roads:
+            return JSONResponse({"status": False, "message": "No roads found"}, 404)
+
+        valid_schedules = {}
+        # Группируем дороги по расписаниям
+        for road in roads:
+            schedule_id = road["id_schedule"]
+            if schedule_id not in valid_schedules:
+                # Получаем данные расписания
+                schedule = await DataSchedule.filter(id=schedule_id).first().values(
+                    "id", "id_user", "title", "description", "children_count",
+                    "id_tariff", "week_days", "duration"
+                )
+                if not schedule:
+                    schedule = {
+                        "id": schedule_id,
+                        "title": "Unknown schedule",
+                        "description": "No description",
+                        "children_count": 0,
+                        "id_tariff": None,
+                        "week_days": "1",
+                        "duration": 0
+                    }
+
+                # Добавляем информацию о пользователе
+                photo = await UsersUserPhoto.filter(
+                    id_user=schedule["id"]).first().values()
+                user_data = await UsersUser.filter(
+                    id=schedule["id_user"]).first().values() if schedule.get(
+                    "id_user") else None
+                schedule["user"] = {
+                    "id_user": schedule.get("id_user", 0),
+                    "name": user_data["name"] if user_data else "Unknown user",
+                    "photo_path": not_user_photo if photo is None or len(
+                        photo) == 0 else photo.get("photo_path", not_user_photo)
+                }
+                schedule["week_days"] = [int(x) for x in
+                                         schedule["week_days"].split(";") if
+                                         x.isdigit()] if schedule["week_days"] else [1]
+
+                # Получаем дополнительные параметры
+                other_parametrs = await DataScheduleOtherParametrs.filter(
+                    id_schedule=schedule_id, isActive=True
+                ).order_by("id").all().values()
+                schedule["other_parametrs"] = [{
+                    "parametr": parametr["id_other_parametr"] if parametr.get(
+                        "id_other_parametr") else 0,
+                    "count": parametr["amount"] if parametr.get(
+                        "amount") is not None else 0
+                } for parametr in other_parametrs] if other_parametrs else []
+
+                schedule["roads"] = []
+                valid_schedules[schedule_id] = schedule
+
+            # Обрабатываем данные дороги
+            road_data = dict()
+            road_data["id"] = road["id"]
+            road_data["type_drive"] = [int(x) for x in road["type_drive"].split(";") if
+                                       x.isdigit()] if road.get("type_drive") else [0]
+
+            # Получаем адреса
+            addresses = await DataScheduleRoadAddress.filter(
+                id_schedule_road=road["id"]
+            ).order_by("id").all().values()
+            data_addresses = []
+            for address in addresses:
+                address_data = {
+                    "from_address": {
+                        "address": address["from_address"] if address.get(
+                            "from_address") else "Unknown from address",
+                        "location": {
+                            "longitude": address["from_lon"] if address.get(
+                                "from_lon") is not None else 0.0,
+                            "latitude": address["from_lat"] if address.get(
+                                "from_lat") is not None else 0.0
+                        }
+                    },
+                    "to_address": {
+                        "address": address["to_address"] if address.get(
+                            "to_address") else "Unknown to address",
+                        "location": {
+                            "longitude": address["to_lon"] if address.get(
+                                "to_lon") is not None else 0.0,
+                            "latitude": address["to_lat"] if address.get(
+                                "to_lat") is not None else 0.0
+                        }
+                    }
+                }
+                data_addresses.append(address_data)
+            road_data["addresses"] = data_addresses if data_addresses else [{
+                "from_address": {"address": "Unknown",
+                                 "location": {"longitude": 0.0, "latitude": 0.0}},
+                "to_address": {"address": "Unknown",
+                               "location": {"longitude": 0.0, "latitude": 0.0}}
+            }]
+
+            price_road = road.get("amount")
+            road_data["salary"] = round(float(price_road),
+                                        2) if price_road is not None else 0.0
+            valid_schedules[schedule_id]["roads"].append(road_data)
+
+        # Финальная обработка и подсчет общей стоимости
+        result_schedules = []
+        for schedule in valid_schedules.values():
+            all_price = sum(road["salary"] for road in schedule["roads"])
+            schedule["all_salary"] = round(float(all_price), 2)
+            del schedule["id_user"]
+            result_schedules.append(schedule)
+
+        return JSONResponse({
+            "status": True,
+            "message": "Success!",
+            "schedules": result_schedules
+        }, 200)
+
+    except ValueError:
+        return JSONResponse({"status": False, "message": "Invalid road_ids format"},
+                            400)
+    except Exception as e:
+        return JSONResponse({"status": False, "message": f"Error: {str(e)}"}, 500)
+
+
 @router.get("/get_my_schedules",
              responses=generate_responses([get_driver_schedules,
                                            schedule_not_found,
