@@ -410,11 +410,16 @@ async def get_full_roads_info(request: Request,
                 schedule["roads"] = []
                 valid_schedules[schedule_id] = schedule
 
-            # Обрабатываем данные дороги
+            # Обрабатываем данные дороги (в случае ошибки - отправляем моковые данные) (TODO)
             road_data = dict()
             road_data["id"] = road["id"]
             road_data["type_drive"] = [int(x) for x in road["type_drive"].split(";") if
                                        x.isdigit()] if road.get("type_drive") else [0]
+            road_data["start_time"] = road["start_time"] if road.get("start_time", 0) is not None else 0
+            road_data["end_time"] = road["end_time"] if road.get("end_time", 0) is not None else 0
+            road_data["week_day"] = road["week_day"] if road.get("week_day", -1) is not None else -1
+            road_data["title"] = road["title"] if road.get("title") else "Unknown road"
+
 
             # Получаем адреса
             addresses = await DataScheduleRoadAddress.filter(
