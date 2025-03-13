@@ -18,7 +18,8 @@ from const.users_const import (AddMoney, ConfirmPayment, DeleteDebitCard,
                                UpdateUserData, UserDataPayment, Period,
                                debit_card_not_found, get_money, get_my_card,
                                order_not_found, start_sbp_answer,
-                               success_answer, task_to_text, get_user, user_not_found)
+                               success_answer, task_to_text, get_user, user_not_found,
+                               NewDebitCard)
 from defs import get_websocket_token, get_date_from_datetime
 from fastapi import APIRouter, HTTPException, Query, Request
 from models.authentication_db import (UsersAuthorizationData,
@@ -433,6 +434,7 @@ async def get_my_debit_card(request: Request):
             (int("20"+card_date[1])==datetime.datetime.now().year and int(card_date[0])<datetime.datetime.now().month)):
             await DataDebitCard.filter(id=card["id"]).update(isActive=False)
             card["isActive"] = False
+        card["name"] = card["name"].upper()
         card["full_number"] = card["card_number"]
         card["card_number"] = f"****{card['card_number'][-4]}{card['card_number'][-3]}" \
                               f"{card['card_number'][-2]}{card['card_number'][-1]}"
@@ -442,6 +444,16 @@ async def get_my_debit_card(request: Request):
                          "message": "Success!",
                          "cards": data,
                          "total": len(data)})
+
+
+@router.post("/add-my-card")
+async def add_debit_card(request: Request, item: NewDebitCard):
+    await DataDebitCard.create(id_user=request.user,
+                               card_number=item.card_number,
+                               exp_date=item.exp_date,
+                               name=item.name)
+    return JSONResponse({"status": True,
+                         "message": "Success!"})
 
 
 @router.post("/delete-my-card",
@@ -550,7 +562,7 @@ async def start_sbp_payment(request: Request, item: SbpPayment):
 async def generate_url_for_payment(request: Request, item: UserDataPayment):
     """
     Генерирует ссылку для проведения платежа через Tinkoff, проверяет версию 3DS.
-    Если версия 3DS - не 2.x.x, то сразу инициализирует оплату (вроде не наш случай).
+    Если версия 3DS - не 2.x.x, то сразу инициализирует оплату.
     Если версия 3DS - 2.x.x, то в дальнейшем потребуется завершить оплату через `/confirm_payment`.
 
     Пример запроса:

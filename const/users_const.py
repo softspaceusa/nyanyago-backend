@@ -1,7 +1,7 @@
 import re
 
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, validator
 from typing import Union, List
 from enum import Enum
 
@@ -153,6 +153,38 @@ class NewDebitCard(BaseModel):
     card_number: str
     exp_date: str
     name: str
+
+    @field_validator('card_number')
+    @classmethod
+    def validate_card_number(cls, value: str) -> str:
+        # Удаляем все пробелы и проверяем, что это 16 цифр
+        cleaned_number = ''.join(filter(str.isdigit, value))  # noqa
+        if not cleaned_number.isdigit() or len(cleaned_number) != 16:
+            raise ValueError('Card number must be exactly 16 digits')
+        return value
+
+    @field_validator('exp_date')
+    @classmethod
+    def validate_exp_date(cls, value: str) -> str:
+        pattern = r'^(0[1-9]|1[0-2])\/\d{2}$'
+        if not re.match(pattern, value):
+            raise ValueError('Expiration date must be in MM/YY format (e.g., 03/26)')
+
+        # Дополнительная проверка на валидность месяца
+        month = int(value.split('/')[0])
+        if month < 1 or month > 12:
+            raise ValueError('Month must be between 01 and 12')
+        return value
+
+    @field_validator('name')
+    @classmethod
+    def validate_name(cls, value: str) -> str:
+        # Проверяем, что имя состоит из двух слов на английском через пробел
+        pattern = r'^[A-Za-z]+\s[A-Za-z]+$'
+        if not re.match(pattern, value):
+            raise ValueError(
+                'Name must consist of two English words separated by a space')
+        return value
 
 
 class DeleteDebitCard(BaseModel):
