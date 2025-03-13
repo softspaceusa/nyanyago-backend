@@ -288,6 +288,10 @@ async def get_full_roads_info(request: Request,
                   "type_drive": [
                     0
                   ],
+                  "start_time": "19:15",
+                  "end_time": "22:15",
+                  "week_day": 5,
+                  "title": "нг",
                   "addresses": [
                     {
                       "from_address": {
@@ -313,6 +317,10 @@ async def get_full_roads_info(request: Request,
                   "type_drive": [
                     0
                   ],
+                  "start_time": "05:00",
+                  "end_time": "10:00",
+                  "week_day": 1,
+                  "title": "в лес",
                   "addresses": [
                     {
                       "from_address": {
@@ -335,7 +343,7 @@ async def get_full_roads_info(request: Request,
                 }
               ],
               "all_salary": 505.35
-            },
+            }
           ]
         }
 
