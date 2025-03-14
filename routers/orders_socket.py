@@ -11,7 +11,8 @@ from const.cost_formulas import get_total_cost_of_the_trip
 from const.dependency import has_access, has_access_driver
 from const.static_data_const import not_user_photo
 from models.authentication_db import UsersUserAccount, UsersBearerToken
-from models.chats_db import ChatsChatParticipant, ChatsChat
+from models.chats_db import ChatsChatParticipant, ChatsChat, ChatsMessage, \
+    HistoryChatNotification
 from models.drivers_db import DataDriverMode
 from models.orders_db import UsersUserOrder, DataOrder, DataOrderInfo, \
     DataOrderAddresses, WaitDataSearchDriver, DataOrderOtherParametrs
@@ -694,7 +695,7 @@ async def send_order_to_driver(id_order: int):
 
 @router.post("/accept_order", responses=generate_responses([forbidden, you_have_active_drive]),
              dependencies=[Depends(has_access_driver)])
-async def accept_order(request: Request, id_order: int):
+async def accept_order(request: Request, id_order: int, send_message: bool = False):
     """
     Роут для принятия заявки водителем. Принимает id_order и текущего пользователя.
     """
@@ -758,6 +759,19 @@ async def accept_order(request: Request, id_order: int):
 
     result["id_chat"] = chat_id
 
+    if send_message:
+        user_order = await UsersUserOrder.filter(id_order=id_order).first().values("token")
+        message_new = await ChatsMessage.create(
+            id_chat=chat_id,
+            id_sender=request.user,
+            msg=f"{user_order['token']}",
+            msgType=5,
+            timestamp_send=time.time(),
+        )
+        await HistoryChatNotification.create(
+            id_user=order.id_user, id_chat=chat_id, id_msg=message_new.id
+        )
+
     try:
         # Отправка сообщения клиенту в сокет
         message = {"id_chat": chat_id}
@@ -783,7 +797,7 @@ async def accept_order(request: Request, id_order: int):
         fbid = await UsersBearerToken.filter(id_user=order.id_user).first().values("fbid")
 
         if fbid:
-            await sendPush(fbid["fbid"], "Водитель найден!", f"Водитель будет через {duration} минут",
+            await sendPush(fbid["fbid"], "Водитель в пути!", f"Водитель будет через {duration} минут",
                            {"action": "driver-found", "id": order.id})
             result["message"].append("The push notification has been sent.")
         else:
