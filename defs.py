@@ -3,6 +3,8 @@ import logging
 
 import requests
 from firebase_dynamic_links import DynamicLinks
+import firebase_admin
+from firebase_admin import credentials, messaging
 
 from const.static_data_const import not_user_photo
 from models.authentication_db import UsersBearerToken, HistoryBearerToken, UsersUserAccount
@@ -106,35 +108,31 @@ async def validate_credit_card(card_number: str) -> bool:
     return checkSum % 10 == 0
 
 
-FB_TOKEN = "AAAAbynLWdY:APA91bGpqTDPKviGxu3qng6_D_mDCuhUDQZfGNtanjepGyVgWWowPr6MF0Yq" \
-           "Fs6ngjQ8eUghx1JjmwKddpR7DEin4CHb1GLGJftOfblbMHG0iTqxOKoTzNIzn2TnXoOwmv8_LrjRsO9Y"
-headers={'Authorization':'key='+str(FB_TOKEN), 'Content-Type': 'application/json'}
-async def sendPush(device_token, title, text, data):
-    try:
-        body = {
-            'notification': {
-                'title': title,
-                'body': text
-            },
-            "data": data if data is not None else {},
-            'to': device_token,
-            'priority': 'high'
-        }
+cred_app_client = credentials.Certificate("fb_client.json")
+cred_app_driver = credentials.Certificate("fb_driver.json")
 
-        response = requests.post("https://fcm.googleapis.com/fcm/send", headers = headers, data=json.dumps(body))
-        print(response.status_code)
-        print()
-        print()
-        print()
-        print(body)
-        print()
-        print()
-        print()
-        print(response.text)
-        print()
-        print()
-    except Exception:
-        await error(traceback.format_exc())
+firebase_app_client = firebase_admin.initialize_app(cred_app_client, name="app_client")
+firebase_app2_driver = firebase_admin.initialize_app(cred_app_driver, name="app_driver")
+
+
+async def sendPush(device_token, title, body, data=None):
+    """Отправляет push-уведомление через нужный Firebase-проект"""
+
+    user_id = await UsersBearerToken.filter(fbid=device_token).first().values("id_user")
+    type_account = await UsersUserAccount.filter(id_user=user_id["id_user"]).first().values("id_type_account")
+    firebase_app = firebase_app_client if type_account["id_type_account"] in [1, 7] else firebase_app2_driver
+
+    message = messaging.Message(
+        notification=messaging.Notification(
+            title=title,
+            body=body
+        ),
+        data=data or {},
+        token=device_token
+    )
+
+    response = messaging.send(message, app=firebase_app)
+    print(f"Уведомление отправлено через! ID сообщения:", response)
 
 
 async def generate_fb_link(auth=False, ref="", refresh_token=""):
