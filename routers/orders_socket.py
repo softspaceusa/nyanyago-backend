@@ -798,7 +798,7 @@ async def accept_order(request: Request, id_order: int, send_message: bool = Fal
 
         if fbid:
             await sendPush(fbid["fbid"], "Водитель в пути!", f"Водитель будет через {duration} минут",
-                           {"action": "driver-found", "id": order.id})
+                           {"action": "driver-found", "id": str(order.id)})
             result["message"].append("The push notification has been sent.")
         else:
             result["message"].append("The fbid was not found for the user.")
@@ -829,7 +829,7 @@ async def decline_order(request: Request, id_order: int):
     await ChatsChat.filter(id=chat["id_chat"]).update(isActive=False)
     fbid = await UsersBearerToken.filter(id_user=order["id_user"]).first().values("fbid")
     await sendPush(fbid["fbid"], "Поиск водителя", f"Водитель отказался от поездки.\nПродолжаем поиск автоняни",
-                   {"action": "decline-drive", "id": order["id"]})
+                   {"action": "decline-drive", "id": str(order["id"])})
     return success_answer
 
 

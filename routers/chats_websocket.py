@@ -255,8 +255,8 @@ async def websocket_endpoint(websocket: WebSocket, token: str):
                         await sendPush(  # TODO: Наверное отправлять Push надо, если пользователь не подключен к веб-сокету. Сейчас вроде бы наоборот.
                             fbid["fbid"],
                             "Новое сообщение",
-                            msg_notification,
-                            {"action": "message", "id": data.id_chat},
+                            str(msg_notification),
+                            {"action": "message", "id": str(data.id_chat)},
                         )
                         await HistoryNotification.create(
                             id_user=receiver.id_user,

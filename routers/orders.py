@@ -1605,7 +1605,8 @@ async def answer_schedule_responses(request: Request, item: AnswerResponse):
         roads_info = await DataScheduleRoad.filter(id__in=roads).values("id", "title",
                                                                         "start_time",
                                                                         "end_time")
-        roads_info = [{**road} for road in roads_info]
+        roads_info = [{key: str(value) for key, value in road.items()} for road in
+                      roads_info]
 
         try:
             await sendPush(
@@ -1615,8 +1616,8 @@ async def answer_schedule_responses(request: Request, item: AnswerResponse):
                 "Пожалуйста, подтвердите актуальность Вашей заявки в приложении.",
                 {
                     "action": "order_request_success",
-                    "id_request": item.id_response,
-                    "id_schedule": item.id_schedule,
+                    "id_request": str(item.id_response),
+                    "id_schedule": str(item.id_schedule),
                     "roads": roads_info,
                 },
             )
