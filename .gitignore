@@ -145,3 +145,9 @@ csscomb.json
 /api_nanny_dump.sql
 /salary_report_*.pdf
 /models/db_backup_an.sql
+
+
+# My
+
+fb_client.json
+fb_driver.json
