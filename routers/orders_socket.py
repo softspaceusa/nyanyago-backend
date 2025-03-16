@@ -920,7 +920,12 @@ async def start_onetime_drive(request: Request, item: CurrentDrive):
           ],
           "total_price": 1305.18,
           "total_distance_meters": 13244,
-          "total_duration_seconds_estimated": 1751
+          "total_duration_seconds_estimated": 1751,
+          "id_status": 4,
+          "user_name": "Ivan",
+          "user_surname": "Ivanov",
+          "user_phone": "+79999999999",
+          "user_photo": "www.example.com/photo.jpg"
         }
 
 
@@ -1033,6 +1038,13 @@ async def start_onetime_drive(request: Request, item: CurrentDrive):
     await UsersUserOrder.create(id_user=request.user, token=token, id_order=order.id)
     # await send_order_to_driver(order.id)
     await DataOrder.filter(id=order.id).update(id_status=4)
+    user_order = await UsersUser.filter(id=request.user).first().values("phone", "name", "surname")
+    user_photo: dict = await UsersUserPhoto.filter(id_user=request.user).first().values()
+    user_photo: str = (
+        not_user_photo
+        if user_photo is None or "photo_path" not in user_photo
+        else user_photo["photo_path"]
+    )
     return JSONResponse(
         {
             "status": True,
@@ -1044,6 +1056,11 @@ async def start_onetime_drive(request: Request, item: CurrentDrive):
             "total_price": tp,
             "total_distance_meters": total_distance,
             "total_duration_seconds_estimated": total_duration,
+            "id_status": 4,
+            "user_name": user_order["name"],
+            "user_surname": user_order["surname"],
+            "user_phone": user_order["phone"],
+            "user_photo": user_photo
         }
     )
 
