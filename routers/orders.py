@@ -1629,6 +1629,7 @@ async def get_schedule_responses(request: Request):
 
         for road_id in road_ids:
             road_info = await DataScheduleRoad.filter(id=road_id).first().values("id", "id_schedule", "week_day", "title")
+            road_info["request_datetime_create"] = await WaitDataScheduleRoadDriver.filter(id_road=road_info["id"]).first().values("datetime_create")
             roads_info.append(road_info)
 
         driver_roads_info.append({

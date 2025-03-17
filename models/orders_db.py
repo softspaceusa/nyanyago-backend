@@ -1,5 +1,6 @@
 from tortoise import fields
 from tortoise.models import Model
+from datetime import datetime as default_datetime
 
 
 class DataDrivingStatus(Model):
@@ -325,8 +326,8 @@ class WaitDataScheduleRoadDriver(Model):
     id_schedule = fields.BigIntField(null=False)
     id_driver = fields.BigIntField(null=False)
     isActive = fields.BooleanField(default=True)
-    datetime_create = fields.DatetimeField(null=True)
-    full_time = fields.BooleanField(default=True)
+    datetime_create = fields.DatetimeField(default=default_datetime.now())
+    full_time = fields.BooleanField(default=True)  # НЕ ИСПОЛЬЗУЕТСЯ
 
 
     class Meta:
