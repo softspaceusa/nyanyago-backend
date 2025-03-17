@@ -4,6 +4,7 @@ from decimal import Decimal
 
 import pytz
 from tortoise.exceptions import DoesNotExist
+from tortoise.query_utils import Prefetch
 
 from const.const import success_answer
 from const.cost_formulas import get_total_cost_of_the_trip
@@ -341,7 +342,7 @@ async def create_schedule(request: Request, item: NewSchedule):
                                           schedule_not_found,
                                           access_forbidden]))
 async def get_schedule(request: Request, id: int):
-    #TODO: Проверка на доступ админам и водителям по этому графику/заявкам
+    # TODO: Проверка на доступ админам и водителям по этому графику/заявкам
     if await DataSchedule.filter(id=id).count() > 0:
         return schedule_not_found
     schedule = await DataSchedule.filter(id=id).first().values("id", "children_count",
@@ -1578,6 +1579,7 @@ async def get_schedule_responses(request: Request):
     # Создаем словарь для хранения данных
     driver_roads = {}
 
+
     for response in responses:
         id_driver = response["id_driver"]
         id_road = response["id_road"]
@@ -1588,6 +1590,30 @@ async def get_schedule_responses(request: Request):
         else:
             driver_roads[id_driver] = [id_road]
 
+    async def get_schedules_with_all_roads_in_list(road_ids):
+        # Получаем все расписания
+        schedules = await DataSchedule.filter(isActive__in=[True, False])
+
+        # Список для хранения подходящих расписаний
+        valid_schedules = []
+
+        # Проходим по каждому расписанию
+        for schedule in schedules:
+            # Получаем все дороги, связанные с этим расписанием
+            schedule_roads = await DataScheduleRoad.filter(
+                id_schedule=schedule.id).values_list("id", flat=True)
+
+            # Проверяем, все ли дороги расписания есть в исходном списке
+            if all(road_id in road_ids for road_id in schedule_roads):
+                # Если да, добавляем расписание в список
+                valid_schedules.append(schedule.id)
+
+        return valid_schedules
+
+    driver_fulltime_schedules = {}
+    for driver_id, roads_ids in driver_roads.items():
+        valid_schedules = await get_schedules_with_all_roads_in_list(roads_ids)
+        driver_fulltime_schedules[driver_id] = valid_schedules
     # Итоговый список
     driver_roads_info = []
 
@@ -1606,7 +1632,8 @@ async def get_schedule_responses(request: Request):
                  await ChatsChatParticipant.filter(id_user=user_id).all().values(
                      "id_chat")]
         chat = await ChatsChatParticipant.filter(id_user=driver_id,
-                                                 id_chat__in=chats).order_by("-id_chat").first()
+                                                 id_chat__in=chats).order_by(
+            "-id_chat").first()
 
         if not chat or not await ChatsChat.filter(id=chat.id_chat,
                                                   isActive=True).exists():
@@ -1624,12 +1651,17 @@ async def get_schedule_responses(request: Request):
         driver_info = await get_driver_info(int(driver_id))
         driver_info["id_chat"] = await get_or_create_chat(request.user, driver_id)
         driver_info["id"] = driver_id
+        driver_info["fulltime_schedules"] = driver_fulltime_schedules[driver_id]
 
         roads_info = []
 
         for road_id in road_ids:
-            road_info = await DataScheduleRoad.filter(id=road_id).first().values("id", "id_schedule", "week_day", "title")
-            temp = await WaitDataScheduleRoadDriver.filter(id_road=road_info["id"]).first().values("datetime_create")
+            road_info = await DataScheduleRoad.filter(id=road_id).first().values("id",
+                                                                                 "id_schedule",
+                                                                                 "week_day",
+                                                                                 "title")
+            temp = await WaitDataScheduleRoadDriver.filter(
+                id_road=road_info["id"]).first().values("datetime_create")
             road_info["request_time"] = temp["datetime_create"]
             roads_info.append(road_info)
 
@@ -1823,7 +1855,7 @@ async def get_onetime_prices(request: Request, duration: int, distance: int):
         cost_without_cashback = ((T / T1) * S * M * k) / J
         P___ = Kc * cost_without_cashback / 100
         cost_with_cashback = cost_without_cashback + (
-                    F1 * cost_without_cashback / 100) + \
+                F1 * cost_without_cashback / 100) + \
                              (X5 * cost_without_cashback / 100) + P___
         result.append({"id_tariff": each["id"], "amount": cost_without_cashback,
                        "amount_cash": cost_with_cashback})
@@ -1859,7 +1891,7 @@ async def get_price_by_road(request: Request, id_tariff: int, duration: int,
     cost_without_cashback = ((T / T1) * S * M * k) / J
     P___ = Kc * cost_without_cashback / 100
     cost_with_cashback = cost_without_cashback + (
-                F1 * cost_without_cashback / 100) + P___
+            F1 * cost_without_cashback / 100) + P___
     return JSONResponse({"status": True,
                          "message": "Success!",
                          "amount": cost_without_cashback,
