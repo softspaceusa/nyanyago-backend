@@ -191,7 +191,7 @@ class DataSchedule(Model):
     children_count = fields.BigIntField()
     id_tariff = fields.BigIntField(null=False)
     week_days = fields.TextField()
-    isActive = fields.BooleanField(default=False)
+    isActive = fields.BooleanField(default=False)  # Либо True/False (если присутствует), либо None (если удалено). Логика при True и False сейчас не отличается никак.
     datetime_create = fields.DatetimeField(null=True)
 
 
@@ -325,7 +325,7 @@ class WaitDataScheduleRoadDriver(Model):
     id_road = fields.BigIntField(null=False)
     id_schedule = fields.BigIntField(null=False)
     id_driver = fields.BigIntField(null=False)
-    isActive = fields.BooleanField(default=True)
+    isActive = fields.BooleanField(default=True)  # False - отклонено, True - активно, None - уже одобрено
     datetime_create = fields.DatetimeField(default=default_datetime.now())
     full_time = fields.BooleanField(default=True)  # НЕ ИСПОЛЬЗУЕТСЯ
 

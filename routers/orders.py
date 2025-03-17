@@ -1690,8 +1690,7 @@ async def answer_schedule_responses(request: Request, item: AnswerResponse):
         JSONResponse: Ответ с информацией об успешном ответе.
     """
     if (
-            await DataSchedule.filter(
-                isActive=False, id_user=request.user, id=item.id_schedule
+            await DataSchedule.filter(id_user=request.user, id=item.id_schedule
             ).count()
             == 0
     ):

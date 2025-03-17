@@ -640,19 +640,6 @@ async def want_schedule_requests(request: Request, item: WantSchedule):
                 {"status": False, "message": "Some of the roads already have drivers!"},
                 404,
             )
-        if (
-            await WaitDataScheduleRoadDriver.filter(
-                id_road=each, isActive=None, id_schedule=item.id_schedule
-            ).count()
-            != 0
-        ):
-            return JSONResponse(
-                {
-                    "status": False,
-                    "message": "Some of the roads already have requests!",
-                },
-                404,
-            )
     requests = []
     for each in item.id_road:
         req = await WaitDataScheduleRoadDriver.create(
