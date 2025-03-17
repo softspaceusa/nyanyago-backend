@@ -11,7 +11,8 @@ from const.dependency import has_access_parent, has_access_franchise
 from const.login_const import forbidden
 from models.chats_db import ChatsChatParticipant, ChatsChat
 from models.drivers_db import UsersDriverData, UsersCar, DataDriverMode
-from models.static_data_db import DataCarTariff, DataOtherDriveParametr, DataCarMark, DataCarModel, DataColor
+from models.static_data_db import DataCarTariff, DataOtherDriveParametr, DataCarMark, \
+    DataCarModel, DataColor
 from const.orders_const import CurrentDrive, you_have_active_drive, start_current_drive, \
     NewSchedule, get_schedule, \
     schedule_not_found, tariff_by_id_not_found, get_schedules, Road, UpdateRoad, \
@@ -45,12 +46,12 @@ def generate_responses(answers: list):
         else:
             description = "Response"
         answer[data.status_code] = {
-                                    "content": {
-                                        "application/json": {
-                                            "example": json.loads(data.body.decode("utf-8"))
-                                        }
-                                    },
-                                    "description": description
+            "content": {
+                "application/json": {
+                    "example": json.loads(data.body.decode("utf-8"))
+                }
+            },
+            "description": description
         }
     return answer
 
@@ -103,18 +104,18 @@ async def update_schedule(request: Request, item: UpdateSchedule):
     if item.other_parametrs is not None and len(item.other_parametrs) > 0:
         for params in item.other_parametrs:
             if (
-                await DataOtherDriveParametr.filter(
-                    id=params.parametr, isActive=True
-                ).count()
-                == 0
+                    await DataOtherDriveParametr.filter(
+                        id=params.parametr, isActive=True
+                    ).count()
+                    == 0
             ):
                 continue
 
             if (
-                await DataScheduleOtherParametrs.filter(
-                    id_schedule=schedule.id, id_other_parametr=params.parametr
-                ).count()
-                > 0
+                    await DataScheduleOtherParametrs.filter(
+                        id_schedule=schedule.id, id_other_parametr=params.parametr
+                    ).count()
+                    > 0
             ):
                 await DataScheduleOtherParametrs.filter(
                     id_schedule=schedule.id, id_other_parametr=params.parametr
@@ -128,7 +129,6 @@ async def update_schedule(request: Request, item: UpdateSchedule):
             )
 
     return success_answer
-
 
 
 @router.post(
@@ -206,10 +206,10 @@ async def create_schedule(request: Request, item: NewSchedule):
     )
     for params in item.other_parametrs:
         if (
-            await DataOtherDriveParametr.filter(
-                id=params.parametr, isActive=True
-            ).count()
-            == 0
+                await DataOtherDriveParametr.filter(
+                    id=params.parametr, isActive=True
+                ).count()
+                == 0
         ):
             continue
         await DataScheduleOtherParametrs.create(
@@ -253,13 +253,13 @@ async def create_schedule(request: Request, item: NewSchedule):
                 address.to_address.location.longitude,
             )
             if (
-                address.from_address.location.longitude == 0
-                and address.from_address.location.latitude == 0
+                    address.from_address.location.longitude == 0
+                    and address.from_address.location.latitude == 0
             ):
                 from_lat, from_lon = await get_lat_lon(address.from_address.address)
             if (
-                address.to_address.location.longitude == 0
-                and address.to_address.location.latitude == 0
+                    address.to_address.location.longitude == 0
+                    and address.to_address.location.latitude == 0
             ):
                 to_lat, to_lon = await get_lat_lon(address.to_address.address)
 
@@ -337,22 +337,26 @@ async def create_schedule(request: Request, item: NewSchedule):
 
 
 @router.get("/schedule/{id}",
-             responses=generate_responses([get_schedule,
-                                           schedule_not_found,
-                                           access_forbidden]))
+            responses=generate_responses([get_schedule,
+                                          schedule_not_found,
+                                          access_forbidden]))
 async def get_schedule(request: Request, id: int):
     #TODO: Проверка на доступ админам и водителям по этому графику/заявкам
-    if await DataSchedule.filter(id=id, isActive=None).count() > 0:
+    if await DataSchedule.filter(id=id).count() > 0:
         return schedule_not_found
-    schedule = await DataSchedule.filter(id=id).first().values("id", "children_count", "id_tariff", "title",
-                                                               "description", "week_days", "duration", "id_user")
+    schedule = await DataSchedule.filter(id=id).first().values("id", "children_count",
+                                                               "id_tariff", "title",
+                                                               "description",
+                                                               "week_days", "duration",
+                                                               "id_user")
     if schedule is None or "id_user" not in schedule:
         return schedule_not_found
     if await check_access_schedule(request.user, schedule["id_user"]) is False:
         return access_forbidden
     schedule["week_days"] = [int(x) for x in schedule["week_days"].split(";")]
-    other_parametrs = await DataScheduleOtherParametrs.filter(id_schedule=schedule["id"],
-                                                              isActive=True).order_by("id").all().values()
+    other_parametrs = await DataScheduleOtherParametrs.filter(
+        id_schedule=schedule["id"],
+        isActive=True).order_by("id").all().values()
     other_parametrs_data = []
     for parametr in other_parametrs:
         other_parametrs_data.append({
@@ -360,34 +364,37 @@ async def get_schedule(request: Request, id: int):
             "count": parametr["amount"]
         })
     schedule["other_parametrs"] = other_parametrs_data
-    tariff = (await DataCarTariff.filter(id=schedule["id_tariff"]).first().values())["amount"]
+    tariff = (await DataCarTariff.filter(id=schedule["id_tariff"]).first().values())[
+        "amount"]
     all_price = 0
-    roads = await DataScheduleRoad.filter(id_schedule=schedule["id"], isActive=True).order_by("id").all().values()
+    roads = await DataScheduleRoad.filter(id_schedule=schedule["id"],
+                                          isActive=True).order_by("id").all().values()
     for road in roads:
         road["type_drive"] = [int(x) for x in road["type_drive"].split(";")]
-        addresses = await DataScheduleRoadAddress.filter(id_schedule_road=road["id"]).order_by("id").all().values()
+        addresses = await DataScheduleRoadAddress.filter(
+            id_schedule_road=road["id"]).order_by("id").all().values()
         data_addresses = []
         price_road = 0
         for address in addresses:
             info, _ = await get_time_drive(address["from_lat"], address["from_lon"],
-                                               address["to_lat"], address["to_lon"], tariff)
+                                           address["to_lat"], address["to_lon"], tariff)
             price_road += info
             all_price += price_road
             address_data = {
-                                "from_address": {
-                                    "address": address["from_address"],
-                                    "location": {
-                                        "longitude": address["from_lon"],
-                                        "latitude": address["from_lat"]
-                                    }
-                                },
-                                "to_address": {
-                                    "address": address["to_address"],
-                                    "location": {
-                                        "longitude": address["to_lon"],
-                                        "latitude": address["to_lat"]
-                                    }
-                                }
+                "from_address": {
+                    "address": address["from_address"],
+                    "location": {
+                        "longitude": address["from_lon"],
+                        "latitude": address["from_lat"]
+                    }
+                },
+                "to_address": {
+                    "address": address["to_address"],
+                    "location": {
+                        "longitude": address["to_lon"],
+                        "latitude": address["to_lat"]
+                    }
+                }
             }
             data_addresses.append(address_data)
         road["amount"] = price_road
@@ -577,7 +584,8 @@ async def get_schedule(request: Request):
                 }
                 data_addresses.append(address_data)
 
-            road["amount"] = round(float(price_road), 2) if price_road is not None else 0
+            road["amount"] = round(float(price_road),
+                                   2) if price_road is not None else 0
             road["addresses"] = data_addresses
 
             road.pop("id_schedule", None)
@@ -616,10 +624,10 @@ async def delete_schedule(request: Request, id: int):
     if await DataSchedule.filter(id=id).count() == 0:
         return schedule_not_found
     if (
-        await DataSchedule.filter(
-            id=id, isActive__in=[True, False], id_user=request.user
-        ).count()
-        == 0
+            await DataSchedule.filter(
+                id=id, isActive__in=[True, False], id_user=request.user
+            ).count()
+            == 0
     ):
         return access_forbidden
 
@@ -661,9 +669,9 @@ async def delete_schedule(request: Request, id: int):
 
         # Проверка на интервал в 30 минут
         if (
-            datetime.timedelta(minutes=0)
-            <= time_difference
-            <= datetime.timedelta(minutes=30)
+                datetime.timedelta(minutes=0)
+                <= time_difference
+                <= datetime.timedelta(minutes=30)
         ):
             debit_amount_data = (
                 await DataScheduleRoad.filter(id=road.id).first().values("amount")
@@ -674,8 +682,8 @@ async def delete_schedule(request: Request, id: int):
                 {
                     "status": False,
                     "message": "До одной из поездок в маршруте осталось менее 30 минут."
-                    "Для удаления - отправьте запрос на /schedule_cancel_with_debit/{id}"
-                    "С query-параметром debit_amount (сумма, которая будет списана)",
+                               "Для удаления - отправьте запрос на /schedule_cancel_with_debit/{id}"
+                               "С query-параметром debit_amount (сумма, которая будет списана)",
                     "debit_amount": debit_amount,
                 },
                 202,
@@ -708,10 +716,10 @@ async def delete_schedule(request: Request, id: int, debit_amount: float):
     if await DataSchedule.filter(id=id).count() == 0:
         return schedule_not_found
     if (
-        await DataSchedule.filter(
-            id=id, isActive__in=[True, False], id_user=request.user
-        ).count()
-        == 0
+            await DataSchedule.filter(
+                id=id, isActive__in=[True, False], id_user=request.user
+            ).count()
+            == 0
     ):
         return access_forbidden
 
@@ -767,10 +775,10 @@ async def delete_schedule_road(request: Request, id: int):
         return schedule_not_found
     road = await DataScheduleRoad.filter(id=id).first().values()
     if (
-        await DataSchedule.filter(
-            id_user=request.user, id=road["id_schedule"], isActive__in=[True, False]
-        ).count()
-        == 0
+            await DataSchedule.filter(
+                id_user=request.user, id=road["id_schedule"], isActive__in=[True, False]
+            ).count()
+            == 0
     ):
         return access_forbidden
     await DataScheduleRoad.filter(id=id, isActive=True).update(isActive=False)
@@ -795,22 +803,29 @@ async def create_schedule_road(request: Request, id: int, item: Road):
     Returns:
         JSONResponse: JSON-ответ
     """
-    if await DataSchedule.filter(id=id, id_user=request.user, isActive__in=[True, False]).count() == 0:
-        print((await DataSchedule.filter(id=id, id_user=request.user, isActive__not=None).count()))
-        print((await DataSchedule.filter(id=id, id_user=request.user, isActive__in=[True, False]).count()))
+    if await DataSchedule.filter(id=id, id_user=request.user,
+                                 isActive__in=[True, False]).count() == 0:
+        print((await DataSchedule.filter(id=id, id_user=request.user,
+                                         isActive__not=None).count()))
+        print((await DataSchedule.filter(id=id, id_user=request.user,
+                                         isActive__in=[True, False]).count()))
         print(id)
         print(request.user)
         print(item.__dict__)
         return schedule_not_found
-    new_road=await DataScheduleRoad.create(id_schedule=id, week_day=item.week_day,
-                                           title=item.title, start_time=item.start_time,
-                                           end_time=item.end_time, type_drive=";".join(map(str, item.type_drive)))
+    new_road = await DataScheduleRoad.create(id_schedule=id, week_day=item.week_day,
+                                             title=item.title,
+                                             start_time=item.start_time,
+                                             end_time=item.end_time,
+                                             type_drive=";".join(
+                                                 map(str, item.type_drive)))
 
     id_tariff_data = await DataSchedule.filter(id=id).first().values("id_tariff")
     if id_tariff_data:
         id_tariff = id_tariff_data["id_tariff"]
     else:
-        return JSONResponse({"status": False, "message": "Tariff for schedule not found!"}, 404)
+        return JSONResponse(
+            {"status": False, "message": "Tariff for schedule not found!"}, 404)
 
     tariff_amount_dict: dict = (
         await DataCarTariff.filter(id=id_tariff).first().values("amount")
@@ -835,13 +850,13 @@ async def create_schedule_road(request: Request, id: int, item: Road):
             address.to_address.location.longitude,
         )
         if (
-            address.from_address.location.longitude == 0
-            and address.from_address.location.latitude == 0
+                address.from_address.location.longitude == 0
+                and address.from_address.location.latitude == 0
         ):
             from_lat, from_lon = await get_lat_lon(address.from_address.address)
         if (
-            address.to_address.location.longitude == 0
-            and address.to_address.location.latitude == 0
+                address.to_address.location.longitude == 0
+                and address.to_address.location.latitude == 0
         ):
             to_lat, to_lon = await get_lat_lon(address.to_address.address)
 
@@ -982,10 +997,12 @@ async def get_total_price(item: GetTotalPrice):
         ):
             to_lat, to_lon = await get_lat_lon(address.to_address.address)
 
-        distance, duration = await get_distance_and_duration(from_address={"lat": from_lat, "lng": from_lon},
-                                                             to_address={"lat": to_lat, "lng": to_lon})
+        distance, duration = await get_distance_and_duration(
+            from_address={"lat": from_lat, "lng": from_lon},
+            to_address={"lat": to_lat, "lng": to_lon})
 
-        total_price += get_total_cost_of_the_trip(M=tariff_amount, S2=distance, To=duration)
+        total_price += get_total_cost_of_the_trip(M=tariff_amount, S2=distance,
+                                                  To=duration)
 
     return JSONResponse({"status": True,
                          "message": "Success!",
@@ -1056,21 +1073,21 @@ async def update_schedule_road(request: Request, item: UpdateRoad):
     if item.title is not None and len(item.title) > 0 and road["title"] != item.title:
         await DataScheduleRoad.filter(id=item.id).update(title=item.title)
     if (
-        item.start_time is not None
-        and len(item.start_time) > 0
-        and road["start_time"] != item.start_time
+            item.start_time is not None
+            and len(item.start_time) > 0
+            and road["start_time"] != item.start_time
     ):
         await DataScheduleRoad.filter(id=item.id).update(start_time=item.start_time)
     if (
-        item.end_time is not None
-        and len(item.end_time) > 0
-        and road["end_time"] != item.end_time
+            item.end_time is not None
+            and len(item.end_time) > 0
+            and road["end_time"] != item.end_time
     ):
         await DataScheduleRoad.filter(id=item.id).update(end_time=item.end_time)
     if (
-        item.week_day is not None
-        and len(str(item.week_day)) > 0
-        and road["week_day"] != item.week_day
+            item.week_day is not None
+            and len(str(item.week_day)) > 0
+            and road["week_day"] != item.week_day
     ):
         await DataScheduleRoad.filter(id=item.id).update(week_day=item.week_day)
     if item.type_drive is not None and len(item.type_drive) > 0:
@@ -1078,7 +1095,8 @@ async def update_schedule_road(request: Request, item: UpdateRoad):
             type_drive=";".join(map(str, item.type_drive))
         )
 
-    id_tariff_data = await DataSchedule.filter(id=road["id_schedule"]).values("id_tariff")
+    id_tariff_data = await DataSchedule.filter(id=road["id_schedule"]).values(
+        "id_tariff")
     if id_tariff_data:
         id_tariff = id_tariff_data[0]["id_tariff"]
     else:
@@ -1109,13 +1127,13 @@ async def update_schedule_road(request: Request, item: UpdateRoad):
                 address.to_address.location.longitude,
             )
             if (
-                address.from_address.location.longitude == 0
-                and address.from_address.location.latitude == 0
+                    address.from_address.location.longitude == 0
+                    and address.from_address.location.latitude == 0
             ):
                 from_lat, from_lon = await get_lat_lon(address.from_address.address)
             if (
-                address.to_address.location.longitude == 0
-                and address.to_address.location.latitude == 0
+                    address.to_address.location.longitude == 0
+                    and address.to_address.location.latitude == 0
             ):
                 to_lat, to_lon = await get_lat_lon(address.to_address.address)
 
@@ -1123,7 +1141,8 @@ async def update_schedule_road(request: Request, item: UpdateRoad):
                 from_address={"lat": from_lat, "lng": from_lon},
                 to_address={"lat": to_lat, "lng": to_lon})
 
-            total_price += get_total_cost_of_the_trip(M=tariff_amount, S2=distance, To=duration)
+            total_price += get_total_cost_of_the_trip(M=tariff_amount, S2=distance,
+                                                      To=duration)
 
             all_addresses.append({
                 "from_address": address.from_address.address,
@@ -1150,7 +1169,8 @@ async def update_schedule_road(request: Request, item: UpdateRoad):
         await DataScheduleRoad.filter(id=item.id).update(
             amount=total_price)
 
-    total_price_from_db = await DataScheduleRoad.filter(id=item.id).first().values("amount")
+    total_price_from_db = await DataScheduleRoad.filter(id=item.id).first().values(
+        "amount")
 
     total_price_from_db = str(total_price_from_db["amount"])
 
@@ -1174,36 +1194,41 @@ async def get_schedule_road(id: int):
     if await DataSchedule.filter(id=road["id_schedule"]).count() == 0:
         return schedule_not_found
     road["type_drive"] = [int(x) for x in road["type_drive"].split(";") if x.isdigit()]
-    addresses = await DataScheduleRoadAddress.filter(id_schedule_road=road["id"]).order_by("id").all().values()
+    addresses = await DataScheduleRoadAddress.filter(
+        id_schedule_road=road["id"]).order_by("id").all().values()
     data_addresses = []
     price_road = 0.0
     schedule = await DataSchedule.filter(id=road["id_schedule"]).first().values()
-    tariff = (await DataCarTariff.filter(id=schedule["id_tariff"]).first().values())["amount"]
+    tariff = (await DataCarTariff.filter(id=schedule["id_tariff"]).first().values())[
+        "amount"]
     for address in addresses:
-        distance, time = await get_distance_and_duration({"lat": address["from_lat"], "lng": address["from_lon"]}, {"lat": address["to_lat"], "lng": address["to_lon"]})
+        distance, time = await get_distance_and_duration(
+            {"lat": address["from_lat"], "lng": address["from_lon"]},
+            {"lat": address["to_lat"], "lng": address["to_lon"]})
         info = get_total_cost_of_the_trip(M=tariff, S2=distance, To=time)
         price_road += info
         address_data = {
-                            "from_address": {
-                                "address": address["from_address"],
-                                "location": {
-                                    "longitude": address["from_lon"],
-                                    "latitude": address["from_lat"]
-                                }
-                            },
-                            "to_address": {
-                                "address": address["to_address"],
-                                "location": {
-                                    "longitude": address["to_lon"],
-                                    "latitude": address["to_lat"]
-                                }
-                            }
+            "from_address": {
+                "address": address["from_address"],
+                "location": {
+                    "longitude": address["from_lon"],
+                    "latitude": address["from_lat"]
+                }
+            },
+            "to_address": {
+                "address": address["to_address"],
+                "location": {
+                    "longitude": address["to_lon"],
+                    "latitude": address["to_lat"]
+                }
+            }
         }
         data_addresses.append(address_data)
     road["addresses"] = data_addresses
     road["amount"] = price_road
     road["tariff"] = schedule["id_tariff"]
-    road["other_parametrs"] = await DataScheduleOtherParametrs.filter(id_schedule=road["id_schedule"]).values('id_other_parametr', 'amount')
+    road["other_parametrs"] = await DataScheduleOtherParametrs.filter(
+        id_schedule=road["id_schedule"]).values('id_other_parametr', 'amount')
     await DataScheduleRoad.filter(id=id, isActive=True).update(amount=price_road)
     del road["id_schedule"]
     del road["isActive"]
@@ -1224,13 +1249,15 @@ async def get_current_order_data(request: Request):
 
     user_types = await UsersUserAccount.filter(id_user=request.user).all()
 
-    if not user_types or not any(user_type.id_type_account in [1, 2] for user_type in user_types):
+    if not user_types or not any(
+            user_type.id_type_account in [1, 2] for user_type in user_types):
         return access_forbidden
 
     current_orders = []
 
     current_orders += await DataOrder.filter(id_user=request.user, isActive=True).all()
-    current_orders += await DataOrder.filter(id_driver=request.user, isActive=True).all()
+    current_orders += await DataOrder.filter(id_driver=request.user,
+                                             isActive=True).all()
 
     if not current_orders:
         return JSONResponse({"status": False, "message": "No active orders found."})
@@ -1247,12 +1274,15 @@ async def get_current_order_data(request: Request):
 
         user_photo = await UsersUserPhoto.filter(id_user=current_order.id_user).first()
         order_info = await DataOrderInfo.filter(id_order=current_order.id).first()
-        order_addresses = await DataOrderAddresses.filter(id_order=current_order.id).all()
+        order_addresses = await DataOrderAddresses.filter(
+            id_order=current_order.id).all()
         other_params = []
-        order_other_params = await DataOrderOtherParametrs.filter(id_order=current_order.id).all()
+        order_other_params = await DataOrderOtherParametrs.filter(
+            id_order=current_order.id).all()
         for other_param in order_other_params:
             if other_param.isActive:
-                name_dict = await DataOtherDriveParametr.filter(id=other_param.id_other_parametr).first().values("title", "amount")
+                name_dict = await DataOtherDriveParametr.filter(
+                    id=other_param.id_other_parametr).first().values("title", "amount")
                 if name_dict:
                     name = name_dict["title"]
                     value = float(name_dict["amount"])
@@ -1303,129 +1333,265 @@ async def start_one_current_drive(request: Request, item: CurrentDrive):
     """
     Вроде Deprecated
     """
-    if await DataOrder.filter(id_status__not=11, id_user=request.user, isActive=True).count() > 0 or\
+    if await DataOrder.filter(id_status__not=11, id_user=request.user,
+                              isActive=True).count() > 0 or \
             await WaitDataSearchDriver.filter(id_user=request.user).count() > 0:
         return you_have_active_drive
     token = str(uuid.uuid4()) + str(uuid.uuid4())
     return token
 
 
-@router.get(
-    "/get_schedule_responses", responses=generate_responses([get_schedule_responses])
-)
+# @router.get(
+#     "/get_schedule_responses", responses=generate_responses([get_schedule_responses])
+# )
+# async def get_schedule_responses(request: Request):
+#     """
+#     Функция возвращает список водителей, готовых к выполнению расписаний текущего пользователя,
+#     и подробной информации о них.
+#
+#     Args:
+#         request (Request): Объект запроса.
+#
+#     Returns:
+#         JSONResponse: JSON-ответ с информацией о водителях.
+#
+#     Example:
+#
+#         Пример ответа:
+#
+#             {
+#               "status": true,
+#               "message": "Success!",
+#               "responses": [
+#                 {
+#                   "id_driver": 14,
+#                   "name": "Евген",
+#                   "photo_path": "https://nyanyago.ru/api/v1.0/files/9b75f2b1-4768-483f-b220-f5463f511ac5104edf9e-83c7-4347-bd12-3d1e886761501728468831.0238381000072405",
+#                   "id_schedule": "9, 10",
+#                   "id_chat": 21,
+#                   "full_time": true,
+#                   "data": [
+#                     {
+#                       "id_road": 17,
+#                       "week_day": 0
+#                     },
+#                     {
+#                       "id_road": 18,
+#                       "week_day": 0
+#                     },
+#                   ]
+#                 }
+#               ]
+#             }
+#     """
+#     async def get_user_schedules(user):
+#         """
+#         Получает 'расписания' текущего пользователя, которые есть в БД, но они не активны.
+#         Т.е. как-бы ещё не выполняются ('ждут', пока за них возьмутся водители).
+#
+#         Args:
+#             user (int): ID пользователя.
+#
+#         Returns:
+#             list: Список ID расписаний.
+#         """
+#         return [
+#             x["id"]
+#             for x in await DataSchedule.filter(id_user=user).values()
+#         ]
+#
+#     async def get_active_data(schedules_id):
+#         """
+#         Получает данные из таблицы 'заявок водителей' для расписаний текущего пользователя.
+#
+#         Args:
+#             schedules_id (list): Список ID расписаний.
+#
+#         Returns:
+#             list: Список из данных об активных заявках водителей.
+#         """
+#         return (
+#             await WaitDataScheduleRoadDriver.filter(
+#                 id_schedule__in=schedules_id, isActive=True
+#             )
+#             .order_by("id_driver")
+#             .values()
+#         )
+#
+#     async def get_or_create_chat(user, driver):
+#         """
+#         Создаёт чат между указанным пользователем и водителем, если его нет.
+#
+#         Args:
+#             user (int): ID пользователя.
+#             driver (int): ID водителя.
+#
+#         Returns:
+#             int: ID чата.
+#         """
+#         chats = [
+#             x["id_chat"]
+#             for x in await ChatsChatParticipant.filter(id_user=user).values()
+#         ]
+#         existing_chats = await ChatsChatParticipant.filter(
+#             id_user=driver, id_chat__in=chats
+#         ).values()
+#
+#         for chat in existing_chats:
+#             if await ChatsChat.filter(id=chat["id_chat"], isActive=True).exists():
+#                 return chat["id_chat"]
+#
+#         # Создать новый чат, если его нет
+#         new_chat = await ChatsChat.create()
+#         await ChatsChatParticipant.create(id_chat=new_chat.id, id_user=user)
+#         await ChatsChatParticipant.create(id_chat=new_chat.id, id_user=driver)
+#         return new_chat.id
+#
+#     async def get_driver_info(driver_id):
+#         """
+#         Получает информацию о водителе (имя и фото).
+#
+#         Args:
+#             driver_id (int): ID водителя.
+#
+#         Returns:
+#             dict: Информация о водителе.
+#         """
+#         user = await UsersUser.filter(id=driver_id).first()
+#         photo = await UsersUserPhoto.filter(id_user=driver_id).first()
+#         return {
+#             "name": user.name if user else "Unknown",
+#             "photo_path": (
+#                 photo.photo_path if photo and photo.photo_path else not_user_photo
+#             ),
+#         }
+#
+#     async def get_roads_info(road_ids):
+#         """
+#         Получает информацию о маршрутах (ID, день недели).
+#
+#         Args:
+#             road_ids (list): Список ID маршрутов.
+#
+#         Returns:
+#             list: Информация о маршрутах.
+#         """
+#         roads = []
+#         for road_id in road_ids:
+#             road = await DataScheduleRoad.filter(id=road_id).first()
+#             if road:
+#                 roads.append({"id_road": road_id, "week_day": road.week_day})
+#         return roads
+#
+#     async def get_drivers_schedules(driver_id):
+#         """
+#         Возвращает список из ID расписаний, на которые откликнулся водитель.
+#
+#         Args:
+#             driver_id (int): ID водителя.
+#
+#         Returns:
+#             set: Список ID расписаний.
+#         """
+#         schedules_set = set()
+#         for row in await WaitDataScheduleRoadDriver.filter(
+#                 id_driver=driver_id, id_schedule__in=schedules_id
+#         ).all():
+#             schedules_set.add(row.id_schedule)
+#         return schedules_set
+#
+#     async def is_full_time_driver(driver_id):
+#         row = await WaitDataScheduleRoadDriver.filter(
+#             id_driver=driver_id, id_schedule__in=schedules_id
+#         ).first()
+#         return row.full_time
+#
+#     schedules_id = await get_user_schedules(request.user)
+#
+#     data = await get_active_data(schedules_id)
+#
+#     answer = []
+#     driver_roads = {}
+#     previous_driver = None
+#
+#     for each in data:
+#         driver_id = each["id_driver"]
+#         road_id = each["id_road"]
+#
+#         if driver_id not in driver_roads:
+#             driver_roads[driver_id] = set()
+#         driver_roads[driver_id].add(road_id)
+#
+#         if driver_id != previous_driver:
+#             if previous_driver is not None:
+#                 chat_id = await get_or_create_chat(request.user, previous_driver)
+#                 driver_info = await get_driver_info(previous_driver)
+#                 road_info = await get_roads_info(list(driver_roads[previous_driver]))
+#                 schedules = await get_drivers_schedules(previous_driver)
+#                 is_full_time = await is_full_time_driver(previous_driver)
+#
+#                 answer.append(
+#                     {
+#                         "id_driver": previous_driver,
+#                         "name": driver_info["name"],
+#                         "photo_path": driver_info["photo_path"],
+#                         "id_schedule": ', '.join(str(x) for x in schedules),
+#                         "id_chat": chat_id,
+#                         "full_time": is_full_time,
+#                         "data": road_info,
+#                     }
+#                 )
+#
+#             previous_driver = driver_id
+#
+#     if previous_driver:
+#         chat_id = await get_or_create_chat(request.user, previous_driver)
+#         driver_info = await get_driver_info(previous_driver)
+#         road_info = await get_roads_info(list(driver_roads[previous_driver]))
+#         schedules = await get_drivers_schedules(previous_driver)
+#         is_full_time = await is_full_time_driver(previous_driver)
+#
+#         answer.append(
+#             {
+#                 "id_driver": previous_driver,
+#                 "name": driver_info["name"],
+#                 "photo_path": driver_info["photo_path"],
+#                 "id_schedule": ', '.join(str(x) for x in schedules),
+#                 "id_chat": chat_id,
+#                 "full_time": is_full_time,
+#                 "data": road_info,
+#             }
+#         )
+#
+#     return JSONResponse({"status": True, "message": "Success!", "responses": answer})
+
+
+@router.get("/get_schedule_responses")
 async def get_schedule_responses(request: Request):
-    """
-    Функция возвращает список водителей, готовых к выполнению расписаний текущего пользователя,
-    и подробной информации о них.
+    my_schedules = [
+        x["id"]
+        for x in await DataSchedule.filter(id_user=request.user).values()
+    ]
+    responses = await WaitDataScheduleRoadDriver.filter(id_schedule__in=my_schedules,
+                                                        isActive=True).all().values()
 
-    Args:
-        request (Request): Объект запроса.
+    # Создаем словарь для хранения данных
+    driver_roads = {}
 
-    Returns:
-        JSONResponse: JSON-ответ с информацией о водителях.
+    for response in responses:
+        id_driver = response["id_driver"]
+        id_road = response["id_road"]
 
-    Example:
+        if id_driver in driver_roads:
+            if id_road not in driver_roads[id_driver]:
+                driver_roads[id_driver].append(id_road)
+        else:
+            driver_roads[id_driver] = [id_road]
 
-        Пример ответа:
-
-            {
-              "status": true,
-              "message": "Success!",
-              "responses": [
-                {
-                  "id_driver": 14,
-                  "name": "Евген",
-                  "photo_path": "https://nyanyago.ru/api/v1.0/files/9b75f2b1-4768-483f-b220-f5463f511ac5104edf9e-83c7-4347-bd12-3d1e886761501728468831.0238381000072405",
-                  "id_schedule": "9, 10",
-                  "id_chat": 21,
-                  "full_time": true,
-                  "data": [
-                    {
-                      "id_road": 17,
-                      "week_day": 0
-                    },
-                    {
-                      "id_road": 18,
-                      "week_day": 0
-                    },
-                  ]
-                }
-              ]
-            }
-    """
-    async def get_user_schedules(user):
-        """
-        Получает 'расписания' текущего пользователя, которые есть в БД, но они не активны.
-        Т.е. как-бы ещё не выполняются ('ждут', пока за них возьмутся водители).
-
-        Args:
-            user (int): ID пользователя.
-
-        Returns:
-            list: Список ID расписаний.
-        """
-        return [
-            x["id"]
-            for x in await DataSchedule.filter(id_user=user, isActive=False).values()
-        ]
-
-    async def get_active_data(schedules_id):
-        """
-        Получает данные из таблицы 'заявок водителей' для расписаний текущего пользователя.
-
-        Args:
-            schedules_id (list): Список ID расписаний.
-
-        Returns:
-            list: Список из данных об активных заявках водителей.
-        """
-        return (
-            await WaitDataScheduleRoadDriver.filter(
-                id_schedule__in=schedules_id, isActive=True
-            )
-            .order_by("id_driver")
-            .values()
-        )
-
-    async def get_or_create_chat(user, driver):
-        """
-        Создаёт чат между указанным пользователем и водителем, если его нет.
-
-        Args:
-            user (int): ID пользователя.
-            driver (int): ID водителя.
-
-        Returns:
-            int: ID чата.
-        """
-        chats = [
-            x["id_chat"]
-            for x in await ChatsChatParticipant.filter(id_user=user).values()
-        ]
-        existing_chats = await ChatsChatParticipant.filter(
-            id_user=driver, id_chat__in=chats
-        ).values()
-
-        for chat in existing_chats:
-            if await ChatsChat.filter(id=chat["id_chat"], isActive=True).exists():
-                return chat["id_chat"]
-
-        # Создать новый чат, если его нет
-        new_chat = await ChatsChat.create()
-        await ChatsChatParticipant.create(id_chat=new_chat.id, id_user=user)
-        await ChatsChatParticipant.create(id_chat=new_chat.id, id_user=driver)
-        return new_chat.id
+    # Итоговый список
+    driver_roads_info = []
 
     async def get_driver_info(driver_id):
-        """
-        Получает информацию о водителе (имя и фото).
-
-        Args:
-            driver_id (int): ID водителя.
-
-        Returns:
-            dict: Информация о водителе.
-        """
         user = await UsersUser.filter(id=driver_id).first()
         photo = await UsersUserPhoto.filter(id_user=driver_id).first()
         return {
@@ -1435,104 +1601,43 @@ async def get_schedule_responses(request: Request):
             ),
         }
 
-    async def get_roads_info(road_ids):
-        """
-        Получает информацию о маршрутах (ID, день недели).
+    async def get_or_create_chat(user_id, driver_id):
+        chats = [x["id_chat"] for x in
+                 await ChatsChatParticipant.filter(id_user=user_id).all().values(
+                     "id_chat")]
+        chat = await ChatsChatParticipant.filter(id_user=driver_id,
+                                                 id_chat__in=chats).order_by("-id_chat").first()
 
-        Args:
-            road_ids (list): Список ID маршрутов.
+        if not chat or not await ChatsChat.filter(id=chat.id_chat,
+                                                  isActive=True).exists():
+            new_chat = await ChatsChat.create()
+            await ChatsChatParticipant.create(id_user=user_id,
+                                              id_chat=new_chat.id)
+            await ChatsChatParticipant.create(id_user=driver_id, id_chat=new_chat.id)
+            chat_id = new_chat.id
+        else:
+            chat_id = chat.id_chat
 
-        Returns:
-            list: Информация о маршрутах.
-        """
-        roads = []
+        return chat_id
+
+    for driver_id, road_ids in driver_roads.items():
+        driver_info = await get_driver_info(int(driver_id))
+        driver_info["id_chat"] = await get_or_create_chat(request.user, driver_id)
+        driver_info["id"] = driver_id
+
+        roads_info = []
+
         for road_id in road_ids:
-            road = await DataScheduleRoad.filter(id=road_id).first()
-            if road:
-                roads.append({"id_road": road_id, "week_day": road.week_day})
-        return roads
+            road_info = await DataScheduleRoad.filter(id=road_id).first().values("id", "id_schedule", "week_day", "title")
+            roads_info.append(road_info)
 
-    async def get_drivers_schedules(driver_id):
-        """
-        Возвращает список из ID расписаний, на которые откликнулся водитель.
+        driver_roads_info.append({
+            "driver_info": driver_info,
+            "roads": roads_info,
+        })
 
-        Args:
-            driver_id (int): ID водителя.
-
-        Returns:
-            set: Список ID расписаний.
-        """
-        schedules_set = set()
-        for row in await WaitDataScheduleRoadDriver.filter(
-                id_driver=driver_id, id_schedule__in=schedules_id
-        ).all():
-            schedules_set.add(row.id_schedule)
-        return schedules_set
-
-    async def is_full_time_driver(driver_id):
-        row = await WaitDataScheduleRoadDriver.filter(
-            id_driver=driver_id, id_schedule__in=schedules_id
-        ).first()
-        return row.full_time
-
-    schedules_id = await get_user_schedules(request.user)
-
-    data = await get_active_data(schedules_id)
-
-    answer = []
-    driver_roads = {}
-    previous_driver = None
-
-    for each in data:
-        driver_id = each["id_driver"]
-        road_id = each["id_road"]
-
-        if driver_id not in driver_roads:
-            driver_roads[driver_id] = set()
-        driver_roads[driver_id].add(road_id)
-
-        if driver_id != previous_driver:
-            if previous_driver is not None:
-                chat_id = await get_or_create_chat(request.user, previous_driver)
-                driver_info = await get_driver_info(previous_driver)
-                road_info = await get_roads_info(list(driver_roads[previous_driver]))
-                schedules = await get_drivers_schedules(previous_driver)
-                is_full_time = await is_full_time_driver(previous_driver)
-
-                answer.append(
-                    {
-                        "id_driver": previous_driver,
-                        "name": driver_info["name"],
-                        "photo_path": driver_info["photo_path"],
-                        "id_schedule": ', '.join(str(x) for x in schedules),
-                        "id_chat": chat_id,
-                        "full_time": is_full_time,
-                        "data": road_info,
-                    }
-                )
-
-            previous_driver = driver_id
-
-    if previous_driver:
-        chat_id = await get_or_create_chat(request.user, previous_driver)
-        driver_info = await get_driver_info(previous_driver)
-        road_info = await get_roads_info(list(driver_roads[previous_driver]))
-        schedules = await get_drivers_schedules(previous_driver)
-        is_full_time = await is_full_time_driver(previous_driver)
-
-        answer.append(
-            {
-                "id_driver": previous_driver,
-                "name": driver_info["name"],
-                "photo_path": driver_info["photo_path"],
-                "id_schedule": ', '.join(str(x) for x in schedules),
-                "id_chat": chat_id,
-                "full_time": is_full_time,
-                "data": road_info,
-            }
-        )
-
-    return JSONResponse({"status": True, "message": "Success!", "responses": answer})
+    return JSONResponse(
+        {"status": True, "message": "Success!", "responses": driver_roads_info})
 
 
 @router.post(
@@ -1653,17 +1758,25 @@ async def answer_schedule_responses(request: Request, item: AnswerResponse):
                                            driver_not_found,
                                            get_driver]))
 async def get_driver_by_id(request: Request, item: GetDriver):
-    if await UsersUser.filter(id=item.id).count() == 0 or await UsersDriverData.filter(id_driver=item.id).count() == 0:
+    if await UsersUser.filter(id=item.id).count() == 0 or await UsersDriverData.filter(
+            id_driver=item.id).count() == 0:
         return driver_not_found
 
     data = DictToModel(await UsersUser.filter(id=item.id).first().values())
-    driver_data = DictToModel(await UsersDriverData.filter(id_driver=item.id).first().values())
+    driver_data = DictToModel(
+        await UsersDriverData.filter(id_driver=item.id).first().values())
     photo = await UsersUserPhoto.filter(id_user=item.id).first().values("photo_path")
-    photo = photo["photo_path"] if photo is not None and "photo_path" in photo else not_user_photo
-    car_data = DictToModel(await UsersCar.filter(id=driver_data.id_car).first().values())
-    car = {"mark": (await DataCarMark.filter(id=car_data.id_car_mark).first().values())["title"],
-           "model": (await DataCarModel.filter(id=car_data.id_car_model).first().values())["title"],
-           "color": (await DataColor.filter(id=car_data.id_color).first().values())["title"],
+    photo = photo[
+        "photo_path"] if photo is not None and "photo_path" in photo else not_user_photo
+    car_data = DictToModel(
+        await UsersCar.filter(id=driver_data.id_car).first().values())
+    car = {"mark": (await DataCarMark.filter(id=car_data.id_car_mark).first().values())[
+        "title"],
+           "model":
+               (await DataCarModel.filter(id=car_data.id_car_model).first().values())[
+                   "title"],
+           "color": (await DataColor.filter(id=car_data.id_color).first().values())[
+               "title"],
            "year": car_data.year_create,
            "state_number": car_data.state_number,
            "ctc": car_data.ctc
@@ -1687,9 +1800,11 @@ async def get_onetime_prices(request: Request, duration: int, distance: int):
     Вроде как deprecated функция.
     См. const -> cost_formulas.py -> get_total_cost_of_the_trip().
     """
-    my_ref, result = await UsersFranchiseUser.filter(id_user=request.user).first().values(), []
+    my_ref, result = await UsersFranchiseUser.filter(
+        id_user=request.user).first().values(), []
     data = await DataCarTariff.filter(id_franchise=my_ref["id_franchise"],
-                                      isActive=True).order_by("id").all().values("id", "amount")
+                                      isActive=True).order_by("id").all().values("id",
+                                                                                 "amount")
     for each in data:
         each["isAvailable"] = True
         T = duration
@@ -1705,9 +1820,11 @@ async def get_onetime_prices(request: Request, duration: int, distance: int):
         Kc = 0.02
         cost_without_cashback = ((T / T1) * S * M * k) / J
         P___ = Kc * cost_without_cashback / 100
-        cost_with_cashback = cost_without_cashback + (F1 * cost_without_cashback / 100) + \
+        cost_with_cashback = cost_without_cashback + (
+                    F1 * cost_without_cashback / 100) + \
                              (X5 * cost_without_cashback / 100) + P___
-        result.append({"id_tariff": each["id"], "amount": cost_without_cashback, "amount_cash": cost_with_cashback})
+        result.append({"id_tariff": each["id"], "amount": cost_without_cashback,
+                       "amount_cash": cost_with_cashback})
     return JSONResponse({"status": True,
                          "message": "Success!",
                          "tariffs": result})
@@ -1716,13 +1833,15 @@ async def get_onetime_prices(request: Request, duration: int, distance: int):
 @router.get("/get_price_by_road",
             responses=generate_responses([success_answer,
                                           access_forbidden]))
-async def get_price_by_road(request: Request, id_tariff: int, duration: int, distance: int):
+async def get_price_by_road(request: Request, id_tariff: int, duration: int,
+                            distance: int):
     """
     Вроде как deprecated функция.
     См. const -> cost_formulas.py -> get_total_cost_of_the_trip().
     """
     my_ref = await UsersFranchiseUser.filter(id_user=request.user).first().values()
-    if await DataCarTariff.filter(id=id_tariff, id_franchise=my_ref["id_franchise"], isActive=True).count() == 0:
+    if await DataCarTariff.filter(id=id_tariff, id_franchise=my_ref["id_franchise"],
+                                  isActive=True).count() == 0:
         return access_forbidden
     tariff = await DataCarTariff.filter(id=id_tariff).first().values()
     T = duration
@@ -1737,7 +1856,8 @@ async def get_price_by_road(request: Request, id_tariff: int, duration: int, dis
     Kc = 0.02
     cost_without_cashback = ((T / T1) * S * M * k) / J
     P___ = Kc * cost_without_cashback / 100
-    cost_with_cashback = cost_without_cashback + (F1 * cost_without_cashback / 100) + P___
+    cost_with_cashback = cost_without_cashback + (
+                F1 * cost_without_cashback / 100) + P___
     return JSONResponse({"status": True,
                          "message": "Success!",
                          "amount": cost_without_cashback,
@@ -1748,9 +1868,13 @@ async def get_price_by_road(request: Request, id_tariff: int, duration: int, dis
             responses=generate_responses([forbidden,
                                           get_orders]))
 async def get_onetime_orders(request: Request, type_order: int):
-    if await UsersUserAccount.filter(id_user=request.user, id_type_account=2).count() == 0 or type_order not in [1, 2]:
+    if await UsersUserAccount.filter(id_user=request.user,
+                                     id_type_account=2).count() == 0 or type_order not in [
+        1, 2]:
         return forbidden
-    answer, orders = [], await DataOrder.filter(id_status__in=[1, 4], isActive=True).order_by("-id").all().values()
+    answer, orders = [], await DataOrder.filter(id_status__in=[1, 4],
+                                                isActive=True).order_by(
+        "-id").all().values()
     for each in orders:
         info = await get_order_data(each)
         if info is None or info == {}:
@@ -1777,12 +1901,15 @@ async def get_driver_token(request: Request):
 @router.get("/get_client_token")
 async def get_client_token(request: Request):
     try:
-        user_order = await UsersUserOrder.filter(id_user=request.user).order_by("-id").first().values('id_order', 'token')
-        is_active = await DataOrder.filter(id=user_order['id_order']).first().values('isActive')
+        user_order = await UsersUserOrder.filter(id_user=request.user).order_by(
+            "-id").first().values('id_order', 'token')
+        is_active = await DataOrder.filter(id=user_order['id_order']).first().values(
+            'isActive')
         if not user_order:
             raise HTTPException(status_code=404, detail="Client tokens not found")
 
-        return JSONResponse({"order": user_order, "is_active": is_active.get('isActive')})
+        return JSONResponse(
+            {"order": user_order, "is_active": is_active.get('isActive')})
 
     except DoesNotExist:
         raise HTTPException(status_code=404, detail="Client not found")
@@ -1819,13 +1946,16 @@ async def new_order(request: Request, one_time_order: OneTimeOrder):
     """
     data_order = DataOrder(
         id_driver=one_time_order.id_driver,
-        id_user=one_time_order.id_driver,  # Т.к. на вход не подаётся id клиента - пусть им будет id водителя
+        id_user=one_time_order.id_driver,
+        # Т.к. на вход не подаётся id клиента - пусть им будет id водителя
         id_status=1,  # 1 = Создан
         id_type_order=1,  # 1 = Единоразовый
-        isActive=False,  # False = Не активен (мб это значит что заказ создан, но не начался)
+        isActive=False,
+        # False = Не активен (мб это значит что заказ создан, но не начался)
     )
 
-    tariff_amount_dict: dict = await DataCarTariff.filter(id=one_time_order.id_tariff).first().values("amount")
+    tariff_amount_dict: dict = await DataCarTariff.filter(
+        id=one_time_order.id_tariff).first().values("amount")
 
     if not tariff_amount_dict:
         raise HTTPException(status_code=400, detail="Tariff not found")
@@ -1839,8 +1969,8 @@ async def new_order(request: Request, one_time_order: OneTimeOrder):
         raise HTTPException(status_code=400, detail="Invalid address")
 
     distance_meters, duration_seconds = await get_distance_and_duration(
-                from_address={"lat": from_lat, "lng": from_lon},
-                to_address={"lat": to_lat, "lng": to_lon})
+        from_address={"lat": from_lat, "lng": from_lon},
+        to_address={"lat": to_lat, "lng": to_lon})
 
     await data_order.save()
 
@@ -1866,4 +1996,3 @@ async def new_order(request: Request, one_time_order: OneTimeOrder):
     )
 
     return success_answer
-

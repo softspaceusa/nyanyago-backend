@@ -745,7 +745,7 @@ async def accept_order(request: Request, id_order: int, send_message: bool = Fal
 
     # Логика по чату между клиентом и водителем
     chats = [x["id_chat"] for x in await ChatsChatParticipant.filter(id_user=order.id_user).all().values("id_chat")]
-    chat = await ChatsChatParticipant.filter(id_user=request.user, id_chat__in=chats).first()
+    chat = await ChatsChatParticipant.filter(id_user=request.user, id_chat__in=chats).order_by("-id_chat").first()
 
     if not chat or not await ChatsChat.filter(id=chat.id_chat, isActive=True).exists():
         new_chat = await ChatsChat.create()
