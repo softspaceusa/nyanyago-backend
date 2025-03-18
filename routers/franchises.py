@@ -722,5 +722,6 @@ async def create_response_new_driver(request: Request, item: ResponseNewDriver):
     else:
         await WaitDataVerifyDriver.filter(id_driver=item.id_driver).delete()
         await UsersVerifyAccount.create(id_user=item.id_driver)
+        await UsersDriverData.filter(id_driver=item.id_driver).update(isActive=True)
         return success_answer
 
