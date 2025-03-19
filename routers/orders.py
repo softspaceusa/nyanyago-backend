@@ -1662,7 +1662,7 @@ async def get_schedule_responses(request: Request):
                                                                                  "title")
             temp = await WaitDataScheduleRoadDriver.filter(
                 id_road=road_info["id"]).first().values("datetime_create")
-            road_info["request_time"] = temp["datetime_create"]
+            road_info["request_time"] = str(temp["datetime_create"])
             roads_info.append(road_info)
 
         driver_roads_info.append({
