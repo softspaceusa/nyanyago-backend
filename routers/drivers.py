@@ -666,7 +666,7 @@ async def want_schedule_requests(request: Request, item: WantSchedule):
             fbid["fbid"],
             "Получена новая заявка",
             "По вашему контракту получен новый отклик от водителя",
-            {"action": "order_request", "id_request": str(req.id)},
+            {"action": "order_request", "id_request": str([r["id"] for r in requests])},
         )
         await HistoryNotification.create(
             id_user=schedule["id_user"],

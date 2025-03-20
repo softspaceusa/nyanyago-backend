@@ -491,7 +491,7 @@ class DeclineRoads(BaseModel):
 
 class AnswerResponse(BaseModel):
     id_schedule: int
-    id_response: int
+    id_responses: List[int]
     flag: bool
 
 

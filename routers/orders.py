@@ -343,7 +343,7 @@ async def create_schedule(request: Request, item: NewSchedule):
                                           access_forbidden]))
 async def get_schedule(request: Request, id: int):
     # TODO: Проверка на доступ админам и водителям по этому графику/заявкам
-    if await DataSchedule.filter(id=id).count() > 0:
+    if await DataSchedule.filter(id=id, isActive=None).count() > 0:
         return schedule_not_found
     schedule = await DataSchedule.filter(id=id).first().values("id", "children_count",
                                                                "id_tariff", "title",
@@ -1578,17 +1578,21 @@ async def get_schedule_responses(request: Request):
 
     # Создаем словарь для хранения данных
     driver_roads = {}
-
+    # Создаем словарь для хранения соответствия id_road -> id заявки
+    road_to_request_id = {}
 
     for response in responses:
         id_driver = response["id_driver"]
         id_road = response["id_road"]
+        request_id = response["id"]
 
         if id_driver in driver_roads:
             if id_road not in driver_roads[id_driver]:
                 driver_roads[id_driver].append(id_road)
         else:
             driver_roads[id_driver] = [id_road]
+
+        road_to_request_id[id_road] = request_id
 
     async def get_schedules_with_all_roads_in_list(road_ids):
         # Получаем все расписания
@@ -1663,6 +1667,7 @@ async def get_schedule_responses(request: Request):
             temp = await WaitDataScheduleRoadDriver.filter(
                 id_road=road_info["id"]).first().values("datetime_create")
             road_info["request_time"] = str(temp["datetime_create"])
+            road_info["id_request"] = road_to_request_id[road_id]
             roads_info.append(road_info)
 
         driver_roads_info.append({
@@ -1695,32 +1700,20 @@ async def answer_schedule_responses(request: Request, item: AnswerResponse):
             == 0
     ):
         return schedule_not_found
-    if (
-            await WaitDataScheduleRoadDriver.filter(
-                id=item.id_response, isActive=True
-            ).count()
-            == 0
-    ):
-        return schedule_not_found
+    for each in item.id_responses:
+        if (
+                await WaitDataScheduleRoadDriver.filter(id=each, isActive=True
+                ).count()
+                == 0
+        ):
+            return schedule_not_found
     data = (
-        await WaitDataScheduleRoadDriver.filter(id=item.id_response, isActive=True)
+        await WaitDataScheduleRoadDriver.filter(id=item.id_responses[0], isActive=True)
         .first()
         .values()
     )
-    id_responses = [
-        x["id"]
-        for x in (
-            await WaitDataScheduleRoadDriver.filter(
-                id_driver=data["id_driver"],
-                id_schedule=data["id_schedule"],
-                isActive=True,
-            )
-            .all()
-            .values()
-        )
-    ]
     roads = []
-    for each in id_responses:
+    for each in item.id_responses:
         if item.flag is False:
             await WaitDataScheduleRoadDriver.filter(id=each).update(isActive=False)
         else:
@@ -1729,7 +1722,7 @@ async def answer_schedule_responses(request: Request, item: AnswerResponse):
             roads.append(road["id_road"])
             await DataScheduleRoadDriver.create(
                 id_schedule_road=road["id_road"],
-                id_driver=data["id_driver"],
+                id_driver=road["id_driver"],
                 isRepeat=True,
             )
     fbid = (
