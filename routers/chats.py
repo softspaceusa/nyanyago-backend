@@ -1,3 +1,5 @@
+from typing import Optional
+
 from models.chats_db import ChatsChatParticipant, ChatsMessage, DataMessageType, ChatsChat, HistoryChatNotification
 from fastapi import APIRouter, Request, HTTPException
 from models.users_db import UsersUser, UsersUserPhoto
@@ -30,77 +32,138 @@ def generate_responses(answers: list):
     return answer
 
 
+@router.post(
+    "/get_chats",
+    responses=generate_responses([get_chats])
+)
+async def get_all_chats(request: Request,
+                        item: Union[GetChats, None] = None) -> JSONResponse:
+    """Получает и возвращает список чатов пользователя с дополнительной информацией."""
 
-@router.post("/get_chats",
-             responses=generate_responses([get_chats]))
-async def get_all_chats(request: Request, item: Union[GetChats, None] = None):
-    clear_chat = []
-    if item is not None:
-        chats = ChatsChatParticipant.filter(id_user=request.user).limit(item.limit).offset(item.offset)
-        chats = await chats.all().values("id_chat")
-    else:
-        chats = await ChatsChatParticipant.filter(id_user=request.user).all().values("id_chat")
-    for each in chats:
-        if await ChatsChat.filter(id=each["id_chat"], isActive=False).count() != 0:
-            clear_chat.append(each)
-    for each in clear_chat:
-        try:
-            chats.remove(each)
-        except Exception:
-            pass
-    count = await ChatsChatParticipant.filter(id_user=request.user).count()
-    for chat in chats:
-        print(chat)
-        id_participant = await ChatsChatParticipant.filter(id_chat=chat["id_chat"],
-                                                           id_user__not=request.user).first().values("id_user")
-        user = await UsersUser.filter(id=id_participant["id_user"]).first().values("name")
-        chat["username"] = user["name"]
-        photo = await UsersUserPhoto.filter(id_user=id_participant["id_user"]).first().values()
-        chat["photo_path"] = photo["photo_path"] if photo is not None and "photo_path" in photo else not_user_photo
-        last_message = await ChatsMessage.filter(id_chat=chat["id_chat"]).order_by("-id").first().values()
-        if last_message is not None:
-            if "msgType" in last_message and last_message["msgType"] == 1:
-                chat["message"] = {"msg": last_message["msg"]}
-            else:
-                chat["message"]={"msg":(await DataMessageType.filter(id=last_message["msgType"])
-                                        .first().values())["title"]}
-            chat["message"]["time"] = last_message["timestamp_send"]
-            new_message = await HistoryChatNotification.filter(id_user=request.user,
-                                                               id_chat=chat["id_chat"], is_readed=False).count()
-            chat["message"]["new_message"] = new_message
+    async def get_user_chats() -> list[dict]:
+        """Получает список чатов пользователя с учетом пагинации."""
+        query = ChatsChatParticipant.filter(id_user=request.user)
+        if item is not None:
+            query = query.limit(item.limit).offset(item.offset)
+        return await query.all().values("id_chat")
+
+    async def is_chat_active(chat_id: int) -> bool:
+        """Проверяет, активен ли чат."""
+        return await ChatsChat.filter(id=chat_id, isActive=False).count() == 0
+
+    async def get_chat_participant(chat_id: int) -> Optional[dict]:
+        """Получает информацию о собеседнике (о том, кто общается с request.user) в чате."""
+        return await ChatsChatParticipant.filter(
+            id_chat=chat_id,
+            id_user__not=request.user
+        ).first().values("id_user")
+
+    async def get_user_info(user_id: int) -> dict:
+        """Получает основную информацию о пользователе."""
+        return await UsersUser.filter(id=user_id).first().values("name")
+
+    async def get_user_photo(user_id: int) -> dict:
+        """Получает фото пользователя."""
+        photo = await UsersUserPhoto.filter(id_user=user_id).first().values()
+        return photo.get("photo_path", not_user_photo)
+
+    async def get_last_message(chat_id: int) -> Optional[dict]:
+        """Получает последнее сообщение в чате."""
+        return await ChatsMessage.filter(id_chat=chat_id).order_by(
+            "-id").first().values()
+
+    async def prepare_message_data(message: dict) -> dict:
+        """Форматирует данные сообщения."""
+        if message.get("msgType") == 1:
+            return {
+                "msg": message["msg"],
+                "time": message["timestamp_send"]
+            }
+
+        message_type = await DataMessageType.filter(
+            id=message["msgType"]).first().values("title")
+        return {
+            "msg": message_type["title"],
+            "time": message["timestamp_send"]
+        }
+
+    async def get_unread_count(chat_id: int) -> int:
+        """Считает непрочитанные сообщения."""
+        return await HistoryChatNotification.filter(
+            id_user=request.user,
+            id_chat=chat_id,
+            is_readed=False
+        ).count()
+
+    def apply_search(chats: list[dict]) -> list[dict]:
+        """Фильтрует чаты по поисковому запросу (по вхождению в username собеседника)."""
+        if not item or not item.search:
+            return chats
+
+        search_lower = item.search.lower()
+        return [
+            chat for chat in chats
+            if "username" in chat and search_lower in chat["username"].lower()
+        ]
+
+    def sort_chats(chats: list[dict]) -> list[dict]:
+        """Сортирует чаты по времени последнего сообщения."""
+
+        def get_sort_key(chat):
+            if not chat.get("message"):
+                return 0
+            return chat["message"].get("time", 0)
+
+        return sorted(chats, key=get_sort_key, reverse=True)
+
+    # 1. Получаем чаты пользователя
+    user_chats = await get_user_chats()
+
+    # 2. Фильтруем активные чаты
+    active_chats = []
+    for chat in user_chats:
+        if await is_chat_active(chat["id_chat"]):
+            active_chats.append(chat)
+
+    # 3. Обогащаем информацию о чатах
+    enriched_chats = []
+    for chat in active_chats:
+        chat_id = chat["id_chat"]
+        result_chat = {"id_chat": chat_id}
+
+        # Информация о собеседнике
+        participant = await get_chat_participant(chat_id)
+        if participant:
+            user_info = await get_user_info(participant["id_user"])
+            result_chat["username"] = user_info["name"]
+            result_chat["photo_path"] = await get_user_photo(participant["id_user"])
+
+        # Последнее сообщение
+        last_message = await get_last_message(chat_id)
+        if last_message:
+            message_data = await prepare_message_data(last_message)
+            message_data["new_message"] = await get_unread_count(chat_id)
+            result_chat["message"] = message_data
         else:
-            chat["message"] = None
-    result = []
-    if item is not None and item.search is not None:
-        for chat in chats:
-            if item.search.lower() in chat["username"].lower() or item.search.lower() == chat["username"].lower():
-                result.append(chat)
-    else:
-        result = chats
-    for i in range(len(result) - 1):
-        for j in range(len(result) - i - 1):
-            if "message" not in result[j] or result[j]["message"] is None and \
-                    "message" in result[j+1] or result[j+1]["message"] is not None:
-                buff=result[j]
-                result[j]=result[j + 1]
-                result[j + 1]=buff
-            if "message" not in result[j+1] or result[j+1]["message"] is None and \
-                    "message" in result[j] or result[j]["message"] is not None:
-                buff=result[j]
-                result[j]=result[j + 1]
-                result[j + 1]=buff
-            if "message" not in result[j+1] or result[j+1]["message"] is None and \
-                    "message" not in result[j] or result[j]["message"] is None:
-                continue
-            if result[j]["message"]["time"] > result[j + 1]["message"]["time"]:
-                buff = result[j]
-                result[j] = result[j + 1]
-                result[j + 1] = buff
-    print(result)
-    return JSONResponse({"status": True,
-                         "message": "Success!",
-                         "chats": list(reversed(result)),
-                         "total": count})
+            result_chat["message"] = None
+
+        enriched_chats.append(result_chat)
+
+    # 4. Применяем поиск
+    filtered_chats = apply_search(enriched_chats)
+
+    # 5. Сортируем чаты
+    sorted_chats = sort_chats(filtered_chats)
+
+    # 6. Получаем общее количество чатов
+    total_chats = await ChatsChatParticipant.filter(id_user=request.user).count()
+
+    return JSONResponse({
+        "status": True,
+        "message": "Success!",
+        "chats": sorted_chats,
+        "total": total_chats
+    })
 
 
 @router.post("/get_chat",
