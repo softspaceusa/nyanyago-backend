@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import List, Dict, Optional
 
 from models.chats_db import ChatsChatParticipant, ChatsMessage, DataMessageType, ChatsChat, HistoryChatNotification
 from fastapi import APIRouter, Request, HTTPException
@@ -37,10 +37,10 @@ def generate_responses(answers: list):
     responses=generate_responses([get_chats])
 )
 async def get_all_chats(request: Request,
-                        item: Union[GetChats, None] = None) -> JSONResponse:
+                       item: Union[GetChats, None] = None) -> JSONResponse:
     """Получает и возвращает список чатов пользователя с дополнительной информацией."""
 
-    async def get_user_chats() -> list[dict]:
+    async def get_user_chats() -> List[Dict]:
         """Получает список чатов пользователя с учетом пагинации."""
         query = ChatsChatParticipant.filter(id_user=request.user)
         if item is not None:
@@ -51,28 +51,28 @@ async def get_all_chats(request: Request,
         """Проверяет, активен ли чат."""
         return await ChatsChat.filter(id=chat_id, isActive=False).count() == 0
 
-    async def get_chat_participant(chat_id: int) -> Optional[dict]:
+    async def get_chat_participant(chat_id: int) -> Optional[Dict]:
         """Получает информацию о собеседнике (о том, кто общается с request.user) в чате."""
         return await ChatsChatParticipant.filter(
             id_chat=chat_id,
             id_user__not=request.user
         ).first().values("id_user")
 
-    async def get_user_info(user_id: int) -> dict:
+    async def get_user_info(user_id: int) -> Dict:
         """Получает основную информацию о пользователе."""
         return await UsersUser.filter(id=user_id).first().values("name")
 
-    async def get_user_photo(user_id: int) -> dict:
+    async def get_user_photo(user_id: int) -> Dict:
         """Получает фото пользователя."""
         photo = await UsersUserPhoto.filter(id_user=user_id).first().values()
         return photo.get("photo_path", not_user_photo)
 
-    async def get_last_message(chat_id: int) -> Optional[dict]:
+    async def get_last_message(chat_id: int) -> Optional[Dict]:
         """Получает последнее сообщение в чате."""
         return await ChatsMessage.filter(id_chat=chat_id).order_by(
             "-id").first().values()
 
-    async def prepare_message_data(message: dict) -> dict:
+    async def prepare_message_data(message: Dict) -> Dict:
         """Форматирует данные сообщения."""
         if message.get("msgType") == 1:
             return {
@@ -95,7 +95,7 @@ async def get_all_chats(request: Request,
             is_readed=False
         ).count()
 
-    def apply_search(chats: list[dict]) -> list[dict]:
+    def apply_search(chats: List[Dict]) -> List[Dict]:
         """Фильтрует чаты по поисковому запросу (по вхождению в username собеседника)."""
         if not item or not item.search:
             return chats
@@ -106,10 +106,10 @@ async def get_all_chats(request: Request,
             if "username" in chat and search_lower in chat["username"].lower()
         ]
 
-    def sort_chats(chats: list[dict]) -> list[dict]:
+    def sort_chats(chats: List[Dict]) -> List[Dict]:
         """Сортирует чаты по времени последнего сообщения."""
 
-        def get_sort_key(chat):
+        def get_sort_key(chat: Dict) -> int:
             if not chat.get("message"):
                 return 0
             return chat["message"].get("time", 0)
@@ -164,7 +164,6 @@ async def get_all_chats(request: Request,
         "chats": sorted_chats,
         "total": total_chats
     })
-
 
 @router.post("/get_chat",
              responses=generate_responses([get_chat]))
