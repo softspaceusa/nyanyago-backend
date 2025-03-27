@@ -108,18 +108,8 @@ task_to_text = {
 
 
 class UpdateUserData(BaseModel):
-    surname: str = Field(
-        min_length=2,
-        max_length=50,
-        pattern="^[a-zA-Z]+$",
-        description="Surname should contain only Latin letters.",
-    )
-    name: str = Field(
-        min_length=2,
-        max_length=50,
-        pattern="^[a-zA-Z]+$",
-        description="Name should contain only Latin letters.",
-    )
+    surname: str
+    name: str
     photo_path: Union[str, None] = None  # Может быть надо, может нет. Пока оставлю
     phone: str = Field(
         pattern=r"^\+7 \(\d{3}\) \d{3} \d{2} \d{2}$",
@@ -127,26 +117,8 @@ class UpdateUserData(BaseModel):
     )
     password: str = Field(
         min_length=8,
-        description="Password with min 8 characters, containing at least one uppercase letter, one digit, and one special character",
+        description="Password with min 8 characters",
     )
-
-    @field_validator("password")
-    def validate_password(cls, value):  # noqa
-        if " " in value:
-            raise ValueError("Password should not contain spaces")
-        if not re.search(r"[A-Z]", value):
-            raise ValueError("Password must contain at least one uppercase letter")
-        if not re.search(r"[0-9]", value):
-            raise ValueError("Password must contain at least one digit")
-        if not re.search(r"[!#$%&?]", value):
-            raise ValueError(
-                "Password must contain at least one special character from !#$%&?"
-            )
-        if not re.search(r"^[A-Za-z0-9!#$%&?]+$", value):
-            raise ValueError(
-                "Password should only contain Latin letters, digits, and special characters !#$%&?"
-            )
-        return value
 
 
 class NewDebitCard(BaseModel):

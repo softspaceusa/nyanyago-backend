@@ -126,38 +126,11 @@ async def update_me_data(request: Request, item: UpdateUserData):
     Args:
         request (Request): Запрос.
         item (UpdateUserData): Данные пользователя.
-    Example:
-         Пример верных данных:
-         item = {"surname": "string",
-                "name": "string",
-                "phone": "+7 (978) 227 26 58",
-                "password": "string1A#"
-                }
 
-         Пример неверных данных:
-         item = {"surname": "string123",
-                "name": "string123",
-                "phone": "+7 (978) 227 2658",
-                "password": "string"
-                }
-
-        Пример ответа при неверных входных данных:
-        {
-          "detail": [
-            {
-              "type": "string_too_short",
-              "loc": [
-                "body",
-                "password"
-              ],
-              "msg": "String should have at least 8 characters",
-              "input": "string",
-              "ctx": {
-                "min_length": 8
-              }
-            }
-          ]
-        }
+    Validation:
+        surname, name - должны быть строкой,
+        телефон СТРОГО формата "+7 (999) 999 99 99",
+        пароль длиной более 8 символов.
 
     Returns:
         JSONResponse: Сообщение об успешном обновлении данных, либо сообщение об ошибке.
@@ -180,7 +153,8 @@ async def update_me_data(request: Request, item: UpdateUserData):
             )
 
         if item.phone != user.phone and item.phone is not None and len(item.phone) > 0:
-            await UsersUser.filter(id=request.user).update(phone=item.phone)
+            cleaned_phone = '+' + ''.join(filter(str.isdigit, item.phone[1:]))
+            await UsersUser.filter(id=request.user).update(phone=cleaned_phone)
 
         if item.photo_path and len(item.photo_path) > 0:  # Может надо, может нет.
             if user_photo and user_photo.get("photo_path") != item.photo_path:
