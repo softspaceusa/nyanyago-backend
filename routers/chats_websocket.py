@@ -15,10 +15,11 @@ import traceback
 import json
 
 from models.users_db import HistoryNotification
+from censure import Censor
 
 router = APIRouter()
 users = {}
-
+censor_ru = Censor.get(lang="ru")
 
 class ConnectionManager:
     """
@@ -126,6 +127,8 @@ async def websocket_endpoint(websocket: WebSocket, token: str):
             mes = await websocket.receive_text()
             data = json.loads(mes)
             data = DictToModel(data)
+            if data.msgType == 1:
+                data.msg = censor_ru.clean_line(str(data.msg), beep='***')[0]
             id_user = (
                 await ChatsChatParticipantToken.filter(token=token).first().values()
             )["id_user"]
