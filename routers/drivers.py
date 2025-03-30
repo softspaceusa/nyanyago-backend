@@ -632,7 +632,8 @@ async def want_schedule_requests(request: Request, item: WantSchedule):
             )
         if (
             await DataScheduleRoadDriver.filter(
-                id_schedule_road=each
+                id_schedule_road=each,
+                isActive=True
             ).count()
             != 0
         ):
