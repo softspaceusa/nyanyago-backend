@@ -108,10 +108,11 @@ task_to_text = {
 
 
 class UpdateUserData(BaseModel):
-    surname: Union[str, None]
-    name: Union[str, None]
+    surname: Union[str, None] = None
+    name: Union[str, None] = None
     photo_path: Union[str, None] = None  # Может быть надо, может нет. Пока оставлю
     phone: Union[str, None] = Field(
+        default=None,
         pattern=r"^\+7 \(\d{3}\) \d{3} \d{2} \d{2}$",
         description="Phone format: '+7 (999) 999 99 99'",
     )

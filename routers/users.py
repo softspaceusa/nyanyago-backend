@@ -121,7 +121,7 @@ async def get_me(request: Request):
 )
 async def update_me_data(request: Request, item: UpdateUserData):
     """
-    Обновляет данные пользователя.
+    Обновляет данные пользователя. Ни одно поле не является обязательным.
 
     Args:
         request (Request): Запрос.
