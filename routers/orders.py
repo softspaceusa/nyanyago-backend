@@ -1715,10 +1715,11 @@ async def answer_schedule_responses(request: Request, item: AnswerResponse):
     roads = []
     for each in item.id_responses:
         if item.flag is False:
-            await WaitDataScheduleRoadDriver.filter(id=each).update(isActive=False)
+            resp = await WaitDataScheduleRoadDriver.filter(id=each).first()
+            await WaitDataScheduleRoadDriver.filter(id_road=resp.id_road, id_schedule=resp.id_schedule, id_driver=resp.id_driver).update(isActive=False)
         else:
             road = await WaitDataScheduleRoadDriver.filter(id=each).first().values()
-            await WaitDataScheduleRoadDriver.filter(id=each).update(isActive=None)
+            await WaitDataScheduleRoadDriver.filter(id_road=road["id_road"], id_schedule=road["id_schedule"], id_driver=road["id_driver"]).update(isActive=None)
             roads.append(road["id_road"])
             await DataScheduleRoadDriver.create(
                 id_schedule_road=road["id_road"],
