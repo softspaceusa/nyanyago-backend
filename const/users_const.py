@@ -115,7 +115,8 @@ class UpdateUserData(BaseModel):
         pattern=r"^\+7 \(\d{3}\) \d{3} \d{2} \d{2}$",
         description="Phone format: '+7 (999) 999 99 99'",
     )
-    password: str = Field(
+    password: Union[str, None] = Field(
+        default=None,
         min_length=8,
         description="Password with min 8 characters",
     )
