@@ -717,7 +717,7 @@ async def decline_roads_requests(request: Request, item: DeclineRoads):
         JSONResponse: Ответ в формате JSON. Может быть сообщение об ошибке ("You do not have access to this road").
     """
     for each in item.id_road:
-        if await DataScheduleRoadDriver.filter(id_schedule_road=each, id_driver=request.user).count() != 1:
+        if await DataScheduleRoadDriver.filter(id_schedule_road=each, id_driver=request.user).count() == 0:
             return JSONResponse({"status": False, "message": "You do not have access to this road"}, 404)
         await DataScheduleRoadDriver.filter(id_schedule_road=each, id_driver=request.user).update(isActive=False)
 

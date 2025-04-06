@@ -1721,7 +1721,7 @@ async def answer_schedule_responses(request: Request, item: AnswerResponse):
             road = await WaitDataScheduleRoadDriver.filter(id=each).first().values()
             await WaitDataScheduleRoadDriver.filter(id_road=road["id_road"], id_schedule=road["id_schedule"], id_driver=road["id_driver"]).update(isActive=None)
             roads.append(road["id_road"])
-            await DataScheduleRoadDriver.create(
+            await DataScheduleRoadDriver.get_or_create(
                 id_schedule_road=road["id_road"],
                 id_driver=road["id_driver"],
                 isRepeat=True,
