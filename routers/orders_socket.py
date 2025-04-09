@@ -797,9 +797,13 @@ async def accept_order(request: Request, id_order: int, send_message: bool = Fal
         fbid = await UsersBearerToken.filter(id_user=order.id_user).first().values("fbid")
 
         if fbid:
-            await sendPush(fbid["fbid"], "Водитель в пути!", f"Водитель будет через {duration} минут",
-                           {"action": "driver-found", "id": str(order.id)})
-            result["message"].append("The push notification has been sent.")
+            try:
+                await sendPush(fbid["fbid"], "Водитель в пути!", f"Водитель будет через {duration} минут",
+                               {"action": "driver-found", "id": str(order.id)})
+                result["message"].append("The push notification has been sent.")
+            except Exception as e:
+                result["status"] = False
+                result["message"].append(f"Error when sending a push notification")
         else:
             result["message"].append("The fbid was not found for the user.")
     else:
