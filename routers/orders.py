@@ -691,6 +691,14 @@ async def delete_schedule(request: Request, id: int):
             )
 
     await DataSchedule.filter(id=id).update(isActive=None)
+    for road in roads:
+        await DataScheduleRoad.filter(id=road.id, isActive=True).update(isActive=False)
+        await DataScheduleRoadDriver.filter(id_schedule_road=road.id, isActive=True).update(
+            isActive=False
+        )
+        await WaitDataScheduleRoadDriver.filter(id_road=road.id).update(
+            isActive=False
+        )
     return success_answer
 
 
@@ -749,6 +757,15 @@ async def delete_schedule(request: Request, id: int, debit_amount: float):
         isComplete=False,
     )
     await DataSchedule.filter(id=id).update(isActive=None)
+    roads = await DataScheduleRoad.filter(id_schedule=id).all()
+    for road in roads:
+        await DataScheduleRoad.filter(id=road.id, isActive=True).update(isActive=False)
+        await DataScheduleRoadDriver.filter(id_schedule_road=road.id, isActive=True).update(
+            isActive=False
+        )
+        await WaitDataScheduleRoadDriver.filter(id_road=road.id).update(
+            isActive=False
+        )
     return success_answer
 
 
@@ -786,6 +803,7 @@ async def delete_schedule_road(request: Request, id: int):
     await DataScheduleRoadDriver.filter(id_schedule_road=id, isActive=True).update(
         isActive=False
     )
+    await WaitDataScheduleRoadDriver.filter(id_road=id).update(isActive=False)
     return success_answer
 
 
