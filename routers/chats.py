@@ -246,3 +246,37 @@ async def get_chat_by_id(request: Request, item: GetMessages):
             "total": count,
         }
     )
+
+
+@router.get("/get_or_create_chat")
+async def get_or_create_chat(request: Request, user_id: int):
+    """
+    Получить или создать чат.
+
+    Args:
+        request (Request): Запрос.
+        user_id (int): ID пользователя.
+
+    Returns:
+        JSONResponse: Ответ в формате JSON.
+    """
+    chats = [
+        x["id_chat"]
+        for x in await ChatsChatParticipant.filter(id_user=request.user)
+        .all()
+        .values("id_chat")
+    ]
+    chat = (
+        await ChatsChatParticipant.filter(id_user=user_id, id_chat__in=chats)
+        .order_by("-id_chat")
+        .first()
+    )
+
+    if not chat or not await ChatsChat.filter(id=chat.id_chat, isActive=True).exists():
+        new_chat = await ChatsChat.create()
+        await ChatsChatParticipant.create(id_user=request.user, id_chat=new_chat.id)
+        await ChatsChatParticipant.create(id_user=user_id, id_chat=new_chat.id)
+        chat_id = new_chat.id
+    else:
+        chat_id = chat.id_chat
+    return JSONResponse({"status": True, "message": "Success!", "id_chat": chat_id})
