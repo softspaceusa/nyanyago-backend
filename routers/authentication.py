@@ -153,6 +153,7 @@ async def registration_parent(item: RegistrationParent):
     )
     await UsersVerifyAccount.create(id_user=user.id)
     await UsersUserAccount.create(id_user=user.id, id_type_account=1)
+    await UsersFranchiseUser.create(id_user=user.id, id_franchise=1)
     return success_answer
 
 
