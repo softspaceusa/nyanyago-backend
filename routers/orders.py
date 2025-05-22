@@ -1589,7 +1589,7 @@ async def start_one_current_drive(request: Request, item: CurrentDrive):
 async def get_schedule_responses(request: Request):
     my_schedules = [
         x["id"]
-        for x in await DataSchedule.filter(id_user=request.user).values()
+        for x in await DataSchedule.filter(id_user=request.user, isActive__in=[True, False]).values()
     ]
     responses = await WaitDataScheduleRoadDriver.filter(id_schedule__in=my_schedules,
                                                         isActive=True).all().values()
