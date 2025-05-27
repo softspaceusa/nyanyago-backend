@@ -550,6 +550,21 @@ async def get_schedule(request: Request):
 
         for road in roads:
             type_drive_raw = road.get("type_drive", "")
+            id_driver_raw = await DataScheduleRoadDriver.filter(
+                id_schedule_road=road["id"]
+            ).first().values("id_driver")
+            id_driver = id_driver_raw["id_driver"] if id_driver_raw else None
+            driver_raw = await UsersUser.filter(id=id_driver).first().values(
+                "name", "surname", "phone"
+            )
+            if driver_raw:
+                road["driver_name"] = driver_raw["name"]
+                road["driver_surname"] = driver_raw["surname"]
+                road["driver_phone"] = driver_raw["phone"]
+            else:
+                road["driver_name"] = None
+                road["driver_surname"] = None
+                road["driver_phone"] = None
             if type_drive_raw:
                 road["type_drive"] = [
                     int(x) for x in type_drive_raw.split(";") if x.isdigit()
