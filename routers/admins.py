@@ -3,7 +3,7 @@ import os
 from const.static_data_const import not_user_photo, not_found_other_parametr,OtherDriveParametr,UpdateOtherDriveParametr
 from models.authentication_db import UsersUserAccount, UsersReferalCode, UsersAuthorizationData, UsersBearerToken
 from models.users_db import UsersVerifyAccount, UsersUserPhoto, UsersReferalUser, \
-    UsersFranchiseUser
+    UsersFranchiseUser, UsersChild
 from models.users_db import HistoryPaymentTink, UsersUser
 from const.login_const import uncorrect_phone, user_already_creates, error_create_user
 from defs import check_correct_phone, error, get_date_from_datetime
@@ -286,6 +286,46 @@ async def get_all_user(item: GetUsers):
                          "message": "Success!",
                          "users": data,
                          "total": total})
+
+
+@router.get("/get_user_children")
+async def get_user_children(request: Request, user_id: int):
+    """
+    Получить список детей пользователя.
+
+    Args:
+        request (Request): Запрос.
+        user_id (int): ID пользователя-родителя.
+
+    Returns:
+        JSONResponse: Ответ в формате JSON с данными детей.
+    """
+    # Проверяем существование пользователя
+    if not await UsersUser.filter(id=user_id, isActive=True).exists():
+        return JSONResponse(
+            {"status": False, "message": "User not found or inactive"},
+            status_code=404
+        )
+
+    # Получаем всех активных детей пользователя
+    children = await UsersChild.filter(
+        id_user=user_id,
+        is_active=True
+    ).order_by("-datetime_create").values(
+        "id",
+        "surname",
+        "name",
+        "patronymic",
+        "child_phone",
+        "contact_phone",
+    )
+
+    return JSONResponse({
+        "status": True,
+        "message": "Success",
+        "data": children,
+        "count": len(children)
+    })
 
 
 @router_for_franchise_admin.post(

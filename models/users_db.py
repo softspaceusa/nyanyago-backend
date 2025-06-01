@@ -25,6 +25,28 @@ class UsersUser(Model):
     def __str__(self):
         return self.id
 
+class UsersChild(Model):
+    """
+    Таблица для хранения информации о детях пользователей.
+    Связь с родителем через id_user (императивный подход).
+    """
+    id = fields.BigIntField(pk=True)
+    surname = fields.TextField(null=True)
+    name = fields.TextField(null=True)
+    patronymic = fields.TextField(null=True)
+    child_phone = fields.TextField(null=True)
+    contact_phone = fields.TextField(null=True)
+    id_user = fields.BigIntField(null=False)
+    is_active = fields.BooleanField(default=True)
+    datetime_create = fields.DatetimeField(null=True)
+
+    class Meta:
+        schema = "users"
+        table = "child"
+
+    def __str__(self):
+        return self.id
+
 
 class UsersReferalUser(Model):
     """
