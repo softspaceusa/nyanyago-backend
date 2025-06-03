@@ -2,6 +2,8 @@ import os
 
 from const.static_data_const import not_user_photo, not_found_other_parametr,OtherDriveParametr,UpdateOtherDriveParametr
 from models.authentication_db import UsersUserAccount, UsersReferalCode, UsersAuthorizationData, UsersBearerToken
+from models.orders_db import DataSchedule, DataScheduleRoad, DataScheduleRoadAddress, \
+    DataScheduleRoadContact
 from models.users_db import UsersVerifyAccount, UsersUserPhoto, UsersReferalUser, \
     UsersFranchiseUser, UsersChild
 from models.users_db import HistoryPaymentTink, UsersUser
@@ -317,7 +319,6 @@ async def get_user_children(request: Request, user_id: int):
         "name",
         "patronymic",
         "child_phone",
-        "contact_phone",
     )
 
     return JSONResponse({
@@ -325,6 +326,199 @@ async def get_user_children(request: Request, user_id: int):
         "message": "Success",
         "data": children,
         "count": len(children)
+    })
+
+
+@router.get("/get_extended_client_info")
+async def get_extended_client_info(request: Request, user_id: int):
+    """
+    Получить расширенную информацию о пользователе:
+        - Информация о родителе
+        - Информация о детях
+        - Информация о локациях
+
+    Args:
+        request (Request): Запрос.
+        user_id (int): ID пользователя.
+
+    Returns:
+        JSONResponse: Ответ в формате JSON с полной информацией о пользователе.
+    """
+    # Проверяем существование пользователя
+    if not await UsersUser.filter(id=user_id, isActive=True).exists():
+        return JSONResponse(
+            {"status": False, "message": "User not found or inactive"},
+            status_code=404
+        )
+
+    user_info = await UsersUser.filter(id=user_id).first().values(
+        "id",
+        "name",
+        "surname",
+        "phone",
+    )
+
+    children = await UsersChild.filter(
+        id_user=user_id,
+        is_active=True
+    ).order_by("-datetime_create").values(
+        "id",
+        "surname",
+        "name",
+        "patronymic",
+        "child_phone",
+        "contact_phone",
+    )
+
+    user_photopath = await UsersUserPhoto.filter(id_user=user_id).first().values("photo_path")
+    user_info["photo_path"] = user_photopath["photo_path"] if user_photopath is not None and "photo_path" in user_photopath else not_user_photo
+
+    # =================== Получаем инфо о локациях ===================
+    user_schedules = await DataSchedule.filter(
+        id_user=user_id,
+        isActive__in=[True, False]
+    ).all().values_list("id", flat=True)
+
+    # Получаем все активные маршруты с основной информацией
+    roads = await DataScheduleRoad.filter(
+        isActive=True,
+        id_schedule__in=list(user_schedules)
+    ).all().values(
+        "id", "title", "week_day", "start_time", "end_time", "type_drive"
+    )
+
+    locations_dict = {}
+    complex_routes = {}  # Для хранения сложных маршрутов (type_drive=2)
+
+    for road in roads:
+        # Получаем адреса для маршрута
+        addresses = await DataScheduleRoadAddress.filter(
+            id_schedule_road=road["id"]
+        ).order_by("id").all().values(
+            "from_address", "to_address", "from_lon", "from_lat", "to_lon", "to_lat"
+        )
+
+        # Получаем контактные лица для маршрута
+        contacts = await DataScheduleRoadContact.filter(
+            id_schedule_road=road["id"], is_active=True
+        ).all().values(
+            "surname", "name", "patronymic", "contact_phone"
+        )
+
+        # Формируем ФИО контактного лица
+        contact_info = None
+        if contacts:
+            contact = contacts[0]  # Берем первое контактное лицо
+            contact_info = {
+                "fio": f"{contact['surname'] or ''} {contact['name'] or ''} {contact['patronymic'] or ''}".strip(),
+                "phone": contact["contact_phone"]
+            }
+
+        # Для маршрутов с промежуточными точками (type_drive=2)
+        if "2" in road["type_drive"]:
+            if road["id"] not in complex_routes:
+                complex_routes[road["id"]] = {
+                    "name": road["title"],
+                    "contact": contact_info,
+                    "points": [],
+                    "schedules": []
+                }
+
+            # Добавляем все точки маршрута
+            for addr in addresses:
+                complex_routes[road["id"]]["points"].append({
+                    "address": addr["from_address"],
+                    "lon": addr["from_lon"],
+                    "lat": addr["from_lat"]
+                })
+                # Добавляем последнюю точку прибытия
+                if addr == addresses[-1]:
+                    complex_routes[road["id"]]["points"].append({
+                        "address": addr["to_address"],
+                        "lon": addr["to_lon"],
+                        "lat": addr["to_lat"]
+                    })
+
+            # Добавляем расписание
+            complex_routes[road["id"]]["schedules"].append({
+                "week_day": road["week_day"],
+                "start_time": road["start_time"],
+                "end_time": road["end_time"]
+            })
+        else:
+            # Обработка обычных маршрутов (type_drive 0 или 1)
+            for addr in addresses:
+                location_key = (
+                    addr["from_address"],
+                    addr["to_address"],
+                    addr["from_lon"],
+                    addr["from_lat"],
+                    addr["to_lon"],
+                    addr["to_lat"]
+                )
+
+                schedule_info = {
+                    "week_day": road["week_day"],
+                    "start_time": road["start_time"],
+                    "end_time": road["end_time"]
+                }
+
+                if location_key not in locations_dict:
+                    locations_dict[location_key] = {
+                        "name": road["title"],
+                        "contact": contact_info,
+                        "from_address": addr["from_address"],
+                        "to_address": addr["to_address"],
+                        "from_lon": addr["from_lon"],
+                        "from_lat": addr["from_lat"],
+                        "to_lon": addr["to_lon"],
+                        "to_lat": addr["to_lat"],
+                        "schedules": [schedule_info],
+                        "is_complex": False
+                    }
+                else:
+                    locations_dict[location_key]["schedules"].append(schedule_info)
+                    if not locations_dict[location_key]["contact"] and contact_info:
+                        locations_dict[location_key]["contact"] = contact_info
+
+    # Преобразуем сложные маршруты в формат локаций
+    for route_id, route_data in complex_routes.items():
+        if route_data["points"]:
+            first_point = route_data["points"][0]
+            last_point = route_data["points"][-1]
+
+            location_key = (
+                first_point["address"],
+                last_point["address"],
+                first_point["lon"],
+                first_point["lat"],
+                last_point["lon"],
+                last_point["lat"]
+            )
+
+            locations_dict[location_key] = {
+                "name": route_data["name"],
+                "contact": route_data["contact"],
+                "from_address": first_point["address"],
+                "to_address": last_point["address"],
+                "from_lon": first_point["lon"],
+                "from_lat": first_point["lat"],
+                "to_lon": last_point["lon"],
+                "to_lat": last_point["lat"],
+                "schedules": route_data["schedules"],
+                "is_complex": True,
+                "intermediate_points": route_data["points"][1:-1] if len(
+                    route_data["points"]) > 2 else []
+            }
+
+    # Преобразуем словарь в список локаций
+    locations = list(locations_dict.values())
+
+    return JSONResponse({
+        "success": True,
+        "user": user_info,
+        "childrens": children,
+        "locations": locations,
     })
 
 

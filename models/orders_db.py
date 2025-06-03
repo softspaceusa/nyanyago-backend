@@ -316,6 +316,27 @@ class DataScheduleRoadDriver(Model):
         return self.id
 
 
+class DataScheduleRoadContact(Model):
+    """
+    Используется хранения информации о контактном лице маршрутов графиков.
+    """
+    id = fields.BigIntField(pk=True)
+    id_schedule_road = fields.BigIntField(null=False)
+    surname = fields.TextField(null=True)
+    name = fields.TextField(null=True)
+    patronymic = fields.TextField(null=True)
+    contact_phone = fields.TextField(null=True)
+    is_active = fields.BooleanField(default=True)
+    datetime_create = fields.DatetimeField(null=True)
+
+
+    class Meta:
+        schema = "data"
+        table = "schedule_road_contact"
+
+    def __str__(self):
+        return self.id
+
 class WaitDataScheduleRoadDriver(Model):
     """
     Используется для хранения заявок водителей на принятие маршрутов графиков.
