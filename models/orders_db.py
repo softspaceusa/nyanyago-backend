@@ -11,7 +11,6 @@ class DataDrivingStatus(Model):
     id = fields.BigIntField(pk=True)
     status = fields.TextField()
 
-
     class Meta:
         schema = "data"
         table = "driving_status"
@@ -32,7 +31,8 @@ class DataOrder(Model):
     id_type_order = fields.BigIntField(null=False)
     isActive = fields.BooleanField(default=True)
     datetime_create = fields.DatetimeField(null=True)
-    type_drive = fields.TextField(default="0")  # Тип поездки: в одну сторону, туда-обратно, с промежуточными точками (0, 1, 2)
+    type_drive = fields.TextField(
+        default="0")  # Тип поездки: в одну сторону, туда-обратно, с промежуточными точками (0, 1, 2)
 
     class Meta:
         schema = "data"
@@ -52,7 +52,6 @@ class WaitDataOrder(Model):
     id_type_order = fields.BigIntField(null=False)
     isActive = fields.BooleanField(default=True)
     datetime_create = fields.DatetimeField(null=True)
-
 
     class Meta:
         schema = "wait_data"
@@ -78,7 +77,6 @@ class DataOrderAddresses(Model):
     to_lat = fields.FloatField()
     isFinish = fields.BooleanField(default=False)
 
-
     class Meta:
         schema = "data"
         table = "order_addresses"
@@ -100,7 +98,6 @@ class WaitDataOrderAddresses(Model):
     to_lon = fields.FloatField()
     to_lat = fields.FloatField()
     isFinish = fields.BooleanField(default=False)
-
 
     class Meta:
         schema = "wait_data"
@@ -149,7 +146,6 @@ class WaitDataOrderInfo(Model):
     id_tariff = fields.BigIntField(null=False)
     id_type_drive = fields.BigIntField(null=False)
 
-
     class Meta:
         schema = "wait_data"
         table = "order_info_data"
@@ -168,7 +164,6 @@ class WaitDataSearchDriver(Model):
     id_user = fields.BigIntField(null=False)
     id_order = fields.BigIntField(null=False)
     token = fields.TextField()
-
 
     class Meta:
         schema = "wait_data"
@@ -191,9 +186,9 @@ class DataSchedule(Model):
     children_count = fields.BigIntField()
     id_tariff = fields.BigIntField(null=False)
     week_days = fields.TextField()
-    isActive = fields.BooleanField(default=False)  # Либо True/False (если присутствует), либо None (если удалено). Логика при True и False сейчас не отличается никак.
+    isActive = fields.BooleanField(
+        default=False)  # Либо True/False (если присутствует), либо None (если удалено). Логика при True и False сейчас не отличается никак.
     datetime_create = fields.DatetimeField(null=True)
-
 
     class Meta:
         schema = "data"
@@ -219,7 +214,6 @@ class DataScheduleRoad(Model):
     datetime_create = fields.DatetimeField(null=True)
     amount = fields.DecimalField(10, 2)
 
-
     class Meta:
         schema = "data"
         table = "schedule_road"
@@ -242,7 +236,6 @@ class DataScheduleRoadAddress(Model):
     to_lon = fields.FloatField()
     to_lat = fields.FloatField()
 
-
     class Meta:
         schema = "data"
         table = "schedule_road_address"
@@ -262,7 +255,6 @@ class DataScheduleOtherParametrs(Model):
     amount = fields.BigIntField()
     isActive = fields.BooleanField(default=True)
     datetime_create = fields.DatetimeField(null=True)
-
 
     class Meta:
         schema = "data"
@@ -307,7 +299,6 @@ class DataScheduleRoadDriver(Model):
     isActive = fields.BooleanField(default=True)
     datetime_create = fields.DatetimeField(null=True)
 
-
     class Meta:
         schema = "data"
         table = "schedule_road_driver"
@@ -329,13 +320,31 @@ class DataScheduleRoadContact(Model):
     is_active = fields.BooleanField(default=True)
     datetime_create = fields.DatetimeField(null=True)
 
-
     class Meta:
         schema = "data"
         table = "schedule_road_contact"
 
     def __str__(self):
         return self.id
+
+
+class DataScheduleRoadChild(Model):
+    """
+    Используется хранения информации о ребёнке маршрута.
+    """
+    id = fields.BigIntField(pk=True)
+    id_schedule_road = fields.BigIntField(null=False)
+    id_child = fields.BigIntField(null=False)
+    is_active = fields.BooleanField(default=True)
+    datetime_create = fields.DatetimeField(null=True)
+
+    class Meta:
+        schema = "data"
+        table = "schedule_road_child"
+
+    def __str__(self):
+        return self.id
+
 
 class WaitDataScheduleRoadDriver(Model):
     """
@@ -346,10 +355,10 @@ class WaitDataScheduleRoadDriver(Model):
     id_road = fields.BigIntField(null=False)
     id_schedule = fields.BigIntField(null=False)
     id_driver = fields.BigIntField(null=False)
-    isActive = fields.BooleanField(default=True)  # False - отклонено, True - активно, None - уже одобрено
+    isActive = fields.BooleanField(
+        default=True)  # False - отклонено, True - активно, None - уже одобрено
     datetime_create = fields.DatetimeField(default=default_datetime.now())
     full_time = fields.BooleanField(default=True)  # НЕ ИСПОЛЬЗУЕТСЯ
-
 
     class Meta:
         schema = "wait_data"
@@ -369,13 +378,9 @@ class UsersUserOrder(Model):
     token = fields.TextField(null=False)
     isActive = fields.BooleanField(default=True)
 
-
     class Meta:
         schema = "users"
         table = "user_order"
 
     def __str__(self):
         return self.id
-
-
-
