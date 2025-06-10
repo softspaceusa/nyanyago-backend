@@ -367,7 +367,7 @@ async def get_extended_client_info(request: Request, user_id: int):
         "name",
         "patronymic",
         "child_phone",
-        "contact_phone",
+        "age",
     )
 
     user_photopath = await UsersUserPhoto.filter(id_user=user_id).first().values(

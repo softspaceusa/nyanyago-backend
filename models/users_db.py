@@ -35,6 +35,7 @@ class UsersChild(Model):
     name = fields.TextField(null=True)
     patronymic = fields.TextField(null=True)
     child_phone = fields.TextField(null=True)
+    age = fields.IntField(null=True)
     contact_phone = fields.TextField(null=True)  # не используется - надо удалить
     id_user = fields.BigIntField(null=False)
     is_active = fields.BooleanField(default=True)
