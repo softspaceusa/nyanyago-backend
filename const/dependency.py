@@ -113,7 +113,7 @@ async def has_access_franchise(credentials: HTTPAuthorizationCredentials=Depends
                                                            "verify_aud": False,
                                                            "verify_iss": False})
         user = await UsersBearerToken.filter(token=token).first().values()
-        if await UsersUserAccount.filter(id_user=user["id_user"], id_type_account__in=[3, 4, 5, 6]).count() == 0:
+        if await UsersUserAccount.filter(id_user=user["id_user"], id_type_account__in=[3, 4, 5, 6, 7]).count() == 0:
             raise HTTPException(403, "Forbidden")
         return token
     except JOSEError as e:  # catches any exception
