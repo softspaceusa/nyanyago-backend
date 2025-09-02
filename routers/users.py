@@ -19,7 +19,7 @@ from const.users_const import (AddMoney, ConfirmPayment, DeleteDebitCard,
                                debit_card_not_found, get_money, get_my_card,
                                order_not_found, start_sbp_answer,
                                success_answer, task_to_text, get_user, user_not_found,
-                               NewDebitCard, ChildCreate)
+                               NewDebitCard, ChildCreate, ChildUpdate)
 from defs import get_websocket_token, get_date_from_datetime
 from fastapi import APIRouter, HTTPException, Query, Request
 from models.authentication_db import (UsersAuthorizationData,
@@ -1126,3 +1126,64 @@ async def add_child(request: Request, payload: ChildCreate):
 
     return access_forbidden
 
+
+@router.put("/update_child/{child_id}")
+async def update_child(request: Request, child_id: int, payload: ChildUpdate):
+    data = DictToModel(await UsersUser.filter(id=request.user).first().values())
+    account = await UsersUserAccount.filter(id_user=request.user).all().values()
+    type_account = [x["id_type_account"] for x in account]
+
+    # проверка верификации и активности
+    if await UsersVerifyAccount.filter(id_user=request.user).count() == 0 or data.isActive in [False, None]:
+        return access_forbidden
+
+    # Родитель (тип 1 и только он один)
+    if 1 in type_account and len(type_account) == 1:
+        child = await UsersChild.filter(id=child_id, id_user=request.user, is_active=True).first()
+        if not child:
+            return {"error": "child not found or access denied"}
+        await child.update_from_dict(payload.dict(exclude_unset=True))
+        await child.save()
+        return {"status": "ok"}
+
+    # Админ (тип 6 или 7 и только он один)
+    if (6 in type_account and len(type_account) == 1) or (7 in type_account and len(type_account) == 1):
+        child = await UsersChild.filter(id=child_id, is_active=True).first()
+        if not child:
+            return {"error": "child not found"}
+        await child.update_from_dict(payload.dict(exclude_unset=True))
+        await child.save()
+        return {"status": "ok"}
+
+    return access_forbidden
+
+
+@router.delete("/delete_child/{child_id}")
+async def delete_child(request: Request, child_id: int):
+    data = DictToModel(await UsersUser.filter(id=request.user).first().values())
+    account = await UsersUserAccount.filter(id_user=request.user).all().values()
+    type_account = [x["id_type_account"] for x in account]
+
+    # проверка верификации и активности
+    if await UsersVerifyAccount.filter(id_user=request.user).count() == 0 or data.isActive in [False, None]:
+        return access_forbidden
+
+    # Родитель
+    if 1 in type_account and len(type_account) == 1:
+        child = await UsersChild.filter(id=child_id, id_user=request.user, is_active=True).first()
+        if not child:
+            return {"error": "child not found or access denied"}
+        child.is_active = False
+        await child.save()
+        return {"status": "ok"}
+
+    # Админ
+    if (6 in type_account and len(type_account) == 1) or (7 in type_account and len(type_account) == 1):
+        child = await UsersChild.filter(id=child_id, is_active=True).first()
+        if not child:
+            return {"error": "child not found"}
+        child.is_active = False
+        await child.save()
+        return {"status": "ok"}
+
+    return access_forbidden

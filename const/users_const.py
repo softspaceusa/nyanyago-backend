@@ -235,3 +235,12 @@ class ChildCreate(BaseModel):
     child_phone: Optional[str] = None
     age: Optional[int] = None
     id_user: Optional[int] = None  # у родителя игнорируется, у админа обязателен
+
+
+class ChildUpdate(BaseModel):
+    surname: Optional[str] = None
+    name: Optional[str] = None
+    patronymic: Optional[str] = None
+    child_phone: Optional[str] = None
+    age: Optional[int] = None
+    is_active: Optional[bool] = None
