@@ -17,9 +17,9 @@ from models.static_data_db import DataCarTariff, DataOtherDriveParametr, DataCar
 from const.orders_const import CurrentDrive, you_have_active_drive, start_current_drive, \
     NewSchedule, get_schedule, \
     schedule_not_found, tariff_by_id_not_found, get_schedules, Road, UpdateRoad, \
-    get_schedule_road, \
+    get_schedule_road_response, \
     get_schedule_responses, AnswerResponse, get_onetime_prices, get_orders, \
-    OneTimeOrder, GetTotalPrice, get_total_price, UpdateSchedule
+    OneTimeOrder, GetTotalPrice, get_total_price, UpdateSchedule, update_road_response
 from const.static_data_const import access_forbidden, DictToModel, not_user_photo
 from models.users_db import UsersUser, UsersUserPhoto, HistoryNotification, \
     UsersFranchiseUser, DataUserBalance, DataUserBalanceHistory
@@ -1196,7 +1196,7 @@ async def get_total_price(item: GetTotalPrice):
 
 
 @router.put(
-    "/schedule_road", responses=generate_responses([success_answer, schedule_not_found])
+    "/schedule_road", responses=generate_responses([update_road_response, schedule_not_found])
 )
 async def update_schedule_road(request: Request, item: UpdateRoad):
     """
@@ -1401,7 +1401,7 @@ async def update_schedule_road(request: Request, item: UpdateRoad):
 
 @router.get("/schedule_road/{id}",
             responses=generate_responses([schedule_not_found,
-                                          get_schedule_road]))
+                                          get_schedule_road_response]))
 async def get_schedule_road(id: int):
     road = await DataScheduleRoad.filter(id=id, isActive=True).first().values()
     if road is None or len(road) == 0:

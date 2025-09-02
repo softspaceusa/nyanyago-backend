@@ -120,84 +120,102 @@ get_schedule = JSONResponse({"status": True,
                                                         }
                                           ]}
                              }, 200)
-get_schedule_road = JSONResponse({"status": True,
-                                  "message": "Success!",
-                                  "schedule_road":
-                                                  {
-                                                      "week_day": 0,
-                                                      "start_time": "string",
-                                                      "end_time": "string",
-                                                      "addresses": [
-                                                          {
-                                                              "from_address": {
-                                                                  "address": "string",
-                                                                  "location": {
-                                                                      "latitude": 0,
-                                                                      "longitude": 0
-                                                                  }
-                                                              },
-                                                              "to_address": {
-                                                                  "address": "string",
-                                                                  "location": {
-                                                                      "latitude": 0,
-                                                                      "longitude": 0
-                                                                  }
-                                                              }
-                                                          }
-                                                      ],
-                                                      "title": "string",
-                                                      "type_drive": [
-                                                          0
-                                                      ]
-                                                }
-                                  })
-get_schedules = JSONResponse({"status": True,
-                             "message": "Success!",
-                             "schedules": [{
-                                          "id": 0,
-                                          "id_user": 0,
-                                          "duration": 0,
-                                          "children_count": 0,
-                                          "isActive": True,
-                                          "datetime_create": "2024-01-01 00:00:00.00000",
-                                          "week_days": [
-                                                            0
-                                          ],
-                                          "id_tariff": 0,
-                                          "other_parametrs": [{
-                                              "parameter": 0,
-                                              "count": 1
-                                          }],
-                                          "roads": [
-                                                        {
-                                                          "week_day": 0,
-                                                          "start_time": "string",
-                                                          "end_time": "string",
-                                                          "addresses": [
-                                                                        {
-                                                                          "from_address": {
-                                                                                            "address": "string",
-                                                                                            "location": {
-                                                                                                          "latitude": 0,
-                                                                                                          "longitude": 0
-                                                                                            }
-                                                                          },
-                                                                          "to_address": {
-                                                                                            "address": "string",
-                                                                                            "location": {
-                                                                                                          "latitude": 0,
-                                                                                                          "longitude": 0
-                                                                                            }
-                                                                          }
-                                                                        }
-                                                          ],
-                                                          "title": "string",
-                                                          "type_drive": [
-                                                                            0
-                                                          ]
-                                                        }
-                                          ]}]
-                             }, 200)
+
+get_schedule_road_response = JSONResponse({
+    "status": True,
+    "message": "Success!",
+    "schedule_road": {
+        "id": 45,
+        "title": "Маршрут на день",
+        "description": "Пример описания маршрута",
+        "week_day": 2,
+        "start_time": "08:00",
+        "end_time": "12:00",
+        "type_drive": [0],  # 0 - в одну сторону, 1 - туда-обратно, 2 - с промежуточными точками
+        "amount": 1200.50,  # стоимость маршрута
+        "tariff": 2,  # id тарифа
+        "addresses": [
+            {
+                "from_address": {
+                    "address": "Москва, Россия",
+                    "location": {"latitude": 55.755825, "longitude": 37.617298}
+                },
+                "to_address": {
+                    "address": "Санкт-Петербург, Россия",
+                    "location": {"latitude": 59.931057, "longitude": 30.360910}
+                }
+            },
+            {
+                "from_address": {
+                    "address": "Казань, Россия",
+                    "location": {"latitude": 55.796127, "longitude": 49.106414}
+                },
+                "to_address": {
+                    "address": "Нижний Новгород, Россия",
+                    "location": {"latitude": 56.326887, "longitude": 44.007500}
+                }
+            }
+        ],
+        "children": [101, 102],  # id детей маршрута
+        "contact": {
+            "surname": "Иванов",
+            "name": "Иван",
+            "patronymic": "Иванович",
+            "phone": "+7 999 123-45-67"
+        },
+        "other_parametrs": [
+            {"id_other_parametr": 1, "amount": 2},
+            {"id_other_parametr": 2, "amount": 1}
+        ]
+    }
+}, 200)
+
+get_schedules = JSONResponse({
+    "status": True,
+    "message": "Success!",
+    "schedules": [{
+        "id": 0,
+        "id_user": 0,
+        "title": "Пример расписания",
+        "description": "Описание примера",
+        "duration": 0,
+        "children_count": 0,
+        "isActive": True,
+        "datetime_create": "2024-01-01 00:00:00.00000",
+        "week_days": [0],
+        "id_tariff": 0,
+        "other_parametrs": [{
+            "parametr": 0,
+            "count": 1
+        }],
+        "roads": [{
+            "week_day": 0,
+            "start_time": "string",
+            "end_time": "string",
+            "title": "string",
+            "type_drive": [0],
+            "amount": 0,
+            "addresses": [{
+                "from_address": {
+                    "address": "string",
+                    "location": {"latitude": 0, "longitude": 0}
+                },
+                "to_address": {
+                    "address": "string",
+                    "location": {"latitude": 0, "longitude": 0}
+                }
+            }],
+            "children": [0],  # список id детей маршрута
+            "contact": {       # контактное лицо
+                "surname": "string",
+                "name": "string",
+                "patronymic": "string",
+                "phone": "string"
+            }
+        }]
+    }]
+}, 200)
+
 
 get_schedules_responses = JSONResponse({"status": True,
                              "message": "Success!",
@@ -345,6 +363,45 @@ get_today_schedule = JSONResponse({"status": True,
                                                      "date": "02.04.2024"
                                                  }
                                 ]})
+
+
+update_road_response = JSONResponse({
+    "status": True,
+    "message": "Success!",
+    "updated_road": {
+        "id": 123,  # id обновлённого маршрута
+        "price": "4500.00",  # итоговая стоимость поездки
+        "road_addresses_(updated)": [
+            {
+                "from_address": "Москва, Россия",
+                "to_address": "Санкт-Петербург, Россия",
+                "from_lat": 55.755825,
+                "from_lon": 37.617298,
+                "to_lat": 59.931057,
+                "to_lon": 30.360910
+            },
+            {
+                "from_address": "Казань, Россия",
+                "to_address": "Нижний Новгород, Россия",
+                "from_lat": 55.796127,
+                "from_lon": 49.106414,
+                "to_lat": 56.326887,
+                "to_lon": 44.007500
+            }
+        ],
+        "children_updated": [101, 102],  # id детей маршрута
+        "contact_updated": {  # контактное лицо
+            "surname": "Иванов",
+            "name": "Иван",
+            "patronymic": "Иванович",
+            "phone": "+7 999 123-45-67"
+        }
+    }
+}, 200)
+
+
+
+
 
 get_driver_token = JSONResponse({"status": True,
                                    "message": "Success!",
