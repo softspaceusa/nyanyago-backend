@@ -2,7 +2,7 @@ import re
 
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, field_validator, validator
-from typing import Union, List
+from typing import Union, List, Optional
 from enum import Enum
 
 
@@ -229,9 +229,9 @@ class Period(str, Enum):
 
 
 class ChildCreate(BaseModel):
-    surname: str | None = None
-    name: str | None = None
-    patronymic: str | None = None
-    child_phone: str | None = None
-    age: int | None = None
-    id_user: int | None = None  # у родителя игнорируется, у админа обязателен
+    surname: Optional[str] = None
+    name: Optional[str] = None
+    patronymic: Optional[str] = None
+    child_phone: Optional[str] = None
+    age: Optional[int] = None
+    id_user: Optional[int] = None  # у родителя игнорируется, у админа обязателен
