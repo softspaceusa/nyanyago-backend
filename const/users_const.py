@@ -226,3 +226,12 @@ class Period(str, Enum):
     current_week = "current_week"
     current_month = "current_month"
     current_year = "current_year"
+
+
+class ChildCreate(BaseModel):
+    surname: str | None = None
+    name: str | None = None
+    patronymic: str | None = None
+    child_phone: str | None = None
+    age: int | None = None
+    id_user: int | None = None  # у родителя игнорируется, у админа обязателен

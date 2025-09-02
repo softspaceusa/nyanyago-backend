@@ -19,7 +19,7 @@ from const.users_const import (AddMoney, ConfirmPayment, DeleteDebitCard,
                                debit_card_not_found, get_money, get_my_card,
                                order_not_found, start_sbp_answer,
                                success_answer, task_to_text, get_user, user_not_found,
-                               NewDebitCard)
+                               NewDebitCard, ChildCreate)
 from defs import get_websocket_token, get_date_from_datetime
 from fastapi import APIRouter, HTTPException, Query, Request
 from models.authentication_db import (UsersAuthorizationData,
@@ -31,7 +31,7 @@ from models.static_data_db import (DataCarMark, DataCarModel, DataColor,
 from models.users_db import (DataDebitCard, DataUserBalance,
                              DataUserBalanceHistory, HistoryPaymentTink,
                              UsersPaymentClient, UsersUser, UsersUserPhoto,
-                             UsersVerifyAccount, WaitDataPaymentTink)
+                             UsersVerifyAccount, WaitDataPaymentTink, UsersChild)
 
 
 router = APIRouter()
@@ -1088,4 +1088,41 @@ async def start_tinkoff_payment(request: Request, item: StartPayment):
     )
 
 
+@router.post("/add_child")
+async def add_child(request: Request, payload: ChildCreate):
+    data = DictToModel(await UsersUser.filter(id=request.user).first().values())
+    account = await UsersUserAccount.filter(id_user=request.user).all().values()
+    type_account = [x["id_type_account"] for x in account]
+
+    # проверка верификации и активности
+    if await UsersVerifyAccount.filter(id_user=request.user).count() == 0 or data.isActive in [False, None]:
+        return access_forbidden
+
+    # Родитель (тип 1, и только он один)
+    if 1 in type_account and len(type_account) == 1:
+        child = await UsersChild.create(
+            surname=payload.surname,
+            name=payload.name,
+            patronymic=payload.patronymic,
+            child_phone=payload.child_phone,
+            age=payload.age,
+            id_user=request.user,  # у родителя всегда текущий
+        )
+        return {"status": "ok", "child_id": child.id}
+
+    # Админ (тип 6 или 7, и только он один)
+    if (6 in type_account and len(type_account) == 1) or (7 in type_account and len(type_account) == 1):
+        if not payload.id_user:
+            return {"error": "id_user is required for admin"}
+        child = await UsersChild.create(
+            surname=payload.surname,
+            name=payload.name,
+            patronymic=payload.patronymic,
+            child_phone=payload.child_phone,
+            age=payload.age,
+            id_user=payload.id_user,  # админ может указывать произвольного пользователя
+        )
+        return {"status": "ok", "child_id": child.id}
+
+    return access_forbidden
 
