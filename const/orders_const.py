@@ -3,8 +3,7 @@ from decimal import Decimal
 
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, field_validator
-from typing import Union, List
-
+from typing import Union, List, Optional
 
 driver_not_found = JSONResponse({"status": False,
                                  "message": "Driver not found!"}, 404)
@@ -430,6 +429,8 @@ class Road(BaseModel):
     addresses: List[DriveAddresses]
     title: str
     type_drive: list  # Тип поездки: в одну сторону, туда-обратно, с промежуточными точками (1, 2, 3)
+    children: Union[List[int], None] = None  # IDs of children for this road
+    contact: Union[dict, None] = None  # {surname, name, patronymic, phone}
 
 
 class UpdateRoad(BaseModel):
@@ -440,6 +441,8 @@ class UpdateRoad(BaseModel):
     addresses: Union[List[DriveAddresses], None] = None
     title: Union[str, None] = None
     type_drive: Union[list, None] = None  # Тип поездки: в одну сторону, туда-обратно, с промежуточными точками (0, 1, 2)
+    children: Union[List[int], None] = None
+    contact: Union[dict, None] = None  # {surname, name, patronymic, phone}
 
 
 class GetTotalPrice(BaseModel):

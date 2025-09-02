@@ -57,6 +57,28 @@ def generate_responses(answers: list):
     return answer
 
 
+async def enrich_roads_with_children_and_contact(roads: list):
+    for road in roads:
+        # children
+        children_records = await DataScheduleRoadChild.filter(id_schedule_road=road["id"], is_active=True).all().values("id_child")
+        road["children"] = [rec["id_child"] for rec in children_records]
+
+        # contact
+        contact_record = await DataScheduleRoadContact.filter(id_schedule_road=road["id"], is_active=True).first().values(
+            "surname", "name", "patronymic", "contact_phone"
+        ) if await DataScheduleRoadContact.filter(id_schedule_road=road["id"], is_active=True).count() > 0 else None
+        if contact_record:
+            road["contact"] = {
+                "surname": contact_record["surname"],
+                "name": contact_record["name"],
+                "patronymic": contact_record["patronymic"],
+                "phone": contact_record["contact_phone"]
+            }
+        else:
+            road["contact"] = None
+    return roads
+
+
 @router.put("/schedule")
 async def update_schedule(request: Request, item: UpdateSchedule):
     """
@@ -305,6 +327,33 @@ async def create_schedule(request: Request, item: NewSchedule):
 
         total_price_from_db = str(total_price_from_db["amount"])
 
+        # --- Contact ---
+        road_contact = None
+        if road.contact:
+            contact_obj = await DataScheduleRoadContact.create(
+                id_schedule_road=new_road.id,
+                surname=road.contact.get("surname"),
+                name=road.contact.get("name"),
+                patronymic=road.contact.get("patronymic"),
+                contact_phone=road.contact.get("phone"),
+            )
+            road_contact = {
+                "surname": contact_obj.surname,
+                "name": contact_obj.name,
+                "patronymic": contact_obj.patronymic,
+                "phone": contact_obj.contact_phone,
+            }
+
+        # --- Children ---
+        road_children = []
+        if road.children:
+            for child_id in road.children:
+                await DataScheduleRoadChild.create(
+                    id_schedule_road=new_road.id,
+                    id_child=child_id,
+                )
+                road_children.append(child_id)
+
         all_roads.append(
             {
                 "id": new_road.id,
@@ -315,6 +364,8 @@ async def create_schedule(request: Request, item: NewSchedule):
                 "type_drive": ";".join(map(str, road.type_drive)),
                 "addresses": all_addresses,
                 "price": total_price_from_db,
+                "contact": road_contact,
+                "children": road_children,
             }
         )
 
@@ -345,40 +396,60 @@ async def get_schedule(request: Request, id: int):
     # TODO: Проверка на доступ админам и водителям по этому графику/заявкам
     if await DataSchedule.filter(id=id, isActive=None).count() > 0:
         return schedule_not_found
-    schedule = await DataSchedule.filter(id=id).first().values("id", "children_count",
-                                                               "id_tariff", "title",
-                                                               "description",
-                                                               "week_days", "duration",
-                                                               "id_user")
+
+    schedule = await DataSchedule.filter(id=id).first().values(
+        "id", "children_count",
+        "id_tariff", "title",
+        "description",
+        "week_days", "duration",
+        "id_user"
+    )
     if schedule is None or "id_user" not in schedule:
         return schedule_not_found
+
     if await check_access_schedule(request.user, schedule["id_user"]) is False:
         return access_forbidden
+
+    # Недели в список
     schedule["week_days"] = [int(x) for x in schedule["week_days"].split(";")]
+
+    # Доп. параметры
     other_parametrs = await DataScheduleOtherParametrs.filter(
         id_schedule=schedule["id"],
-        isActive=True).order_by("id").all().values()
-    other_parametrs_data = []
-    for parametr in other_parametrs:
-        other_parametrs_data.append({
+        isActive=True
+    ).order_by("id").all().values()
+
+    schedule["other_parametrs"] = [
+        {
             "parametr": parametr["id_other_parametr"],
             "count": parametr["amount"]
-        })
-    schedule["other_parametrs"] = other_parametrs_data
-    tariff = (await DataCarTariff.filter(id=schedule["id_tariff"]).first().values())[
-        "amount"]
+        }
+        for parametr in other_parametrs
+    ]
+
+    # Тариф
+    tariff = (await DataCarTariff.filter(id=schedule["id_tariff"]).first().values())["amount"]
+
     all_price = 0
-    roads = await DataScheduleRoad.filter(id_schedule=schedule["id"],
-                                          isActive=True).order_by("id").all().values()
+    roads = await DataScheduleRoad.filter(
+        id_schedule=schedule["id"], isActive=True
+    ).order_by("id").all().values()
+
     for road in roads:
         road["type_drive"] = [int(x) for x in road["type_drive"].split(";")]
+
+        # Адреса
         addresses = await DataScheduleRoadAddress.filter(
-            id_schedule_road=road["id"]).order_by("id").all().values()
+            id_schedule_road=road["id"]
+        ).order_by("id").all().values()
+
         data_addresses = []
         price_road = 0
         for address in addresses:
-            info, _ = await get_time_drive(address["from_lat"], address["from_lon"],
-                                           address["to_lat"], address["to_lon"], tariff)
+            info, _ = await get_time_drive(
+                address["from_lat"], address["from_lon"],
+                address["to_lat"], address["to_lon"], tariff
+            )
             price_road += info
             all_price += price_road
             address_data = {
@@ -398,16 +469,37 @@ async def get_schedule(request: Request, id: int):
                 }
             }
             data_addresses.append(address_data)
+
         road["amount"] = price_road
         road["addresses"] = data_addresses
+
+        # Контактное лицо
+        contact = await DataScheduleRoadContact.filter(
+            id_schedule_road=road["id"], isActive=True
+        ).first().values("surname", "name", "patronymic", "phone") if await DataScheduleRoadContact.filter(
+            id_schedule_road=road["id"], isActive=True
+        ).exists() else None
+        road["contact"] = contact
+
+        # Дети маршрута
+        children = await DataScheduleRoadChild.filter(
+            id_schedule_road=road["id"], isActive=True
+        ).all().values("id_child")
+        road["children"] = [child["id_child"] for child in children]
+
+        # Убираем лишнее
         del road["id_schedule"]
         del road["isActive"]
         del road["datetime_create"]
+
     schedule["roads"] = roads
     schedule["amount"] = all_price
-    return JSONResponse({"status": True,
-                         "message": "Success!",
-                         "schedule": schedule}, 200)
+
+    return JSONResponse({
+        "status": True,
+        "message": "Success!",
+        "schedule": schedule
+    }, 200)
 
 
 @router.get(
@@ -540,6 +632,8 @@ async def get_schedule(request: Request):
             )
         schedule["other_parametrs"] = other_parametrs_data
 
+
+
         all_price = 0
         roads = (
             await DataScheduleRoad.filter(id_schedule=schedule["id"], isActive=True)
@@ -599,6 +693,26 @@ async def get_schedule(request: Request):
                     },
                 }
                 data_addresses.append(address_data)
+
+            # дети маршрута
+            children = await DataScheduleRoadChild.filter(
+                id_schedule_road=road["id"], is_active=True
+            ).all().values("id_child")
+            road["children"] = [c["id_child"] for c in children] if children else []
+
+            # контакт
+            contact = await DataScheduleRoadContact.filter(
+                id_schedule_road=road["id"], is_active=True
+            ).first()
+            if contact:
+                road["contact"] = {
+                    "surname": contact.surname,
+                    "name": contact.name,
+                    "patronymic": contact.patronymic,
+                    "phone": contact.contact_phone,
+                }
+            else:
+                road["contact"] = None
 
             road["amount"] = round(float(price_road),
                                    2) if price_road is not None else 0
@@ -714,6 +828,13 @@ async def delete_schedule(request: Request, id: int):
         await WaitDataScheduleRoadDriver.filter(id_road=road.id).update(
             isActive=False
         )
+
+        # Деактивация детей маршрута
+        await DataScheduleRoadChild.filter(id_schedule_road=road.id, is_active=True).update(is_active=False)
+
+        # Деактивация контактных лиц
+        await DataScheduleRoadContact.filter(id_schedule_road=road.id, is_active=True).update(is_active=False)
+
     return success_answer
 
 
@@ -781,6 +902,13 @@ async def delete_schedule(request: Request, id: int, debit_amount: float):
         await WaitDataScheduleRoadDriver.filter(id_road=road.id).update(
             isActive=False
         )
+
+        # Деактивация детей маршрута
+        await DataScheduleRoadChild.filter(id_schedule_road=road.id, is_active=True).update(is_active=False)
+
+        # Деактивация контактных лиц
+        await DataScheduleRoadContact.filter(id_schedule_road=road.id, is_active=True).update(is_active=False)
+
     return success_answer
 
 
@@ -793,8 +921,8 @@ async def delete_schedule(request: Request, id: int, debit_amount: float):
 )
 async def delete_schedule_road(request: Request, id: int):
     """
-    Удаляет маршрут с данным ID из расписания/графика/контракта (заодно делая связь
-    маршрут-водитель неактивной)
+    Удаляет маршрут с данным ID из расписания/графика/контракта (заодно деактивируя
+    связь маршрут-водитель, детей и контактных лиц)
 
     Args:
         request (Request): Объект запроса
@@ -819,6 +947,13 @@ async def delete_schedule_road(request: Request, id: int):
         isActive=False
     )
     await WaitDataScheduleRoadDriver.filter(id_road=id).update(isActive=False)
+
+    # Деактивация детей маршрута
+    await DataScheduleRoadChild.filter(id_schedule_road=id, is_active=True).update(is_active=False)
+
+    # Деактивация контактных лиц
+    await DataScheduleRoadContact.filter(id_schedule_road=id, is_active=True).update(is_active=False)
+
     return success_answer
 
 
@@ -853,6 +988,22 @@ async def create_schedule_road(request: Request, id: int, item: Road):
                                              end_time=item.end_time,
                                              type_drive=";".join(
                                                  map(str, item.type_drive)))
+
+    # Сохранить детей, связанных с дорогой
+    if item.children:
+        for child_id in item.children:
+            await DataScheduleRoadChild.create(id_schedule_road=new_road.id,
+                                               id_child=child_id)
+
+    # Сохранить контакт, связанный с дорогой
+    if item.contact:
+        await DataScheduleRoadContact.create(
+            id_schedule_road=new_road.id,
+            surname=item.contact.get("surname"),
+            name=item.contact.get("name"),
+            patronymic=item.contact.get("patronymic"),
+            contact_phone=item.contact.get("phone"),
+        )
 
     id_tariff_data = await DataSchedule.filter(id=id).first().values("id_tariff")
     if id_tariff_data:
@@ -1208,12 +1359,42 @@ async def update_schedule_road(request: Request, item: UpdateRoad):
 
     total_price_from_db = str(total_price_from_db["amount"])
 
+    # --- Обновление детей ---
+    if item.children is not None:
+        # Деактивируем старых детей
+        await DataScheduleRoadChild.filter(id_schedule_road=item.id,
+                                           is_active=True).update(is_active=False)
+        # Добавляем новых
+        for child_id in item.children:
+            await DataScheduleRoadChild.create(
+                id_schedule_road=item.id,
+                id_child=child_id,
+                is_active=True
+            )
+
+    # --- Обновление контакта ---
+    if item.contact is not None:
+        # Деактивируем старый контакт
+        await DataScheduleRoadContact.filter(id_schedule_road=item.id,
+                                             is_active=True).update(is_active=False)
+        # Создаём новый
+        await DataScheduleRoadContact.create(
+            id_schedule_road=item.id,
+            surname=item.contact.get("surname"),
+            name=item.contact.get("name"),
+            patronymic=item.contact.get("patronymic"),
+            contact_phone=item.contact.get("phone"),
+            is_active=True
+        )
+
     return JSONResponse({"status": True,
                          "message": "Success!",
                          "updated_road": {
                              "price": total_price_from_db,
                              "id": item.id,
-                             "road_addresses_(updated)": all_addresses
+                             "road_addresses_(updated)": all_addresses,
+                             "children_updated": item.children,
+                             "contact_updated": item.contact
                          }
                          }, 200)
 
@@ -1258,6 +1439,24 @@ async def get_schedule_road(id: int):
             }
         }
         data_addresses.append(address_data)
+
+    # --- Дети маршрута ---
+    children_rows = await DataScheduleRoadChild.filter(id_schedule_road=road["id"], is_active=True).all()
+    children_ids = [child.id_child for child in children_rows]
+    road["children"] = children_ids
+
+    # --- Контактное лицо ---
+    contact_row = await DataScheduleRoadContact.filter(id_schedule_road=road["id"], is_active=True).first()
+    if contact_row:
+        road["contact"] = {
+            "surname": contact_row.surname,
+            "name": contact_row.name,
+            "patronymic": contact_row.patronymic,
+            "phone": contact_row.contact_phone
+        }
+    else:
+        road["contact"] = None
+
     road["addresses"] = data_addresses
     road["amount"] = price_road
     road["tariff"] = schedule["id_tariff"]
