@@ -1,3 +1,4 @@
+import decimal
 import math
 import json
 import uuid
@@ -22,7 +23,7 @@ from const.orders_const import start_onetime_drive, CurrentDrive, JSONResponse, 
 from const.users_const import order_not_found, success_answer
 from defs import error, get_time_drive, get_order_data, sendPush, get_order_data_for_socket, get_order_data_socket
 from models.static_data_db import DataCarTariff
-from models.users_db import UsersUser, UsersUserPhoto
+from models.users_db import UsersUser, UsersUserPhoto, DataUserBalance
 from sevice.google_maps_api import get_lat_lon, get_distance_and_duration
 
 logging.basicConfig(level=logging.INFO)
@@ -848,10 +849,12 @@ async def start_onetime_drive(request: Request, item: CurrentDrive):
 
     Пример тарифов (взято из БД 20.12.2024):
         - 78 руб/км - эконом - id=1
-        - 108 руб/км - комфорт - id=2
-        - 138 руб/км - бизнес - id=4
-        - 198 руб/км - минивэн - id=5
-        - 243 руб/км - премиум - id=6
+        (
+            - 108 руб/км - комфорт - id=2
+            - 138 руб/км - бизнес - id=4
+            - 198 руб/км - минивэн - id=5
+            - 243 руб/км - премиум - id=6
+        ) --- РЕШЕНО БЫЛО НЕ ИСПОЛЬЗОВАТЬ 02.09.2025
 
     Пример доп. параметров поездки (other_parametrs):
         - id=1 - Встретить ребёнка
@@ -940,9 +943,6 @@ async def start_onetime_drive(request: Request, item: CurrentDrive):
     Returns:
         JSONResponse: Ответ с данными созданной поездки и токен
     """
-    order = await DataOrder.create(id_user=request.user, id_status=1, id_type_order=1,
-                                   type_drive=item.type_drive-1)
-
     all_addresses = []
 
     total_price: float = 0.0
@@ -958,6 +958,7 @@ async def start_onetime_drive(request: Request, item: CurrentDrive):
 
     tariff_amount: int = tariff_amount_dict["amount"]
 
+    # сначала считаем стоимость, но без создания заказа
     for index, address in enumerate(item.addresses):
         from_lat, from_lon = (
             address.from_address.location.latitude,
@@ -967,15 +968,10 @@ async def start_onetime_drive(request: Request, item: CurrentDrive):
             address.to_address.location.latitude,
             address.to_address.location.longitude,
         )
-        if (
-            address.from_address.location.longitude == 0
-            and address.from_address.location.latitude == 0
-        ):
+
+        if from_lat == 0 and from_lon == 0:
             from_lat, from_lon = await get_lat_lon(address.from_address.address)
-        if (
-            address.to_address.location.longitude == 0
-            and address.to_address.location.latitude == 0
-        ):
+        if to_lat == 0 and to_lon == 0:
             to_lat, to_lon = await get_lat_lon(address.to_address.address)
 
         distance, duration = await get_distance_and_duration(
@@ -1001,24 +997,54 @@ async def start_onetime_drive(request: Request, item: CurrentDrive):
             }
         )
 
-        # Устанавливаем isFinish в True, если это последний адрес в списке
-        is_finish = index == len(item.addresses) - 1
-
-        await DataOrderAddresses.create(
-            id_order=order.id,
-            from_address=address.from_address.address,
-            to_address=address.to_address.address,
-            from_lat=from_lat,
-            from_lon=from_lon,
-            to_lat=to_lat,
-            to_lon=to_lon,
-            isFinish=is_finish,
-        )
     tp: float = round(total_price, 2)
     if item.type_drive == 2:
         tp = round(total_price * 2, 2)
-        total_distance = total_distance * 2
-        total_duration = total_duration * 2
+        total_distance *= 2
+        total_duration *= 2
+
+    # --- проверка баланса до создания заказа ---
+    balance_row = await DataUserBalance.filter(id_user=request.user).first()
+
+    if not balance_row:
+        # если записи нет — создаём с нулевым балансом
+        balance_row = await DataUserBalance.create(id_user=request.user, money=decimal.Decimal(0.0))
+
+    if balance_row.money < tp:
+        return JSONResponse(
+            {
+                "status": False,
+                "message": "Недостаточно средств для создания поездки",
+                "required": tp,
+                "current_balance": float(balance_row.money),
+            },
+            402  # Payment Required
+        )
+
+    # резервируем деньги
+    balance_row.money -= tp
+    await balance_row.save()
+    # --- конец проверки ---
+
+    # только если денег хватает — создаём заказ
+    order = await DataOrder.create(
+        id_user=request.user, id_status=1, id_type_order=1, type_drive=item.type_drive-1
+    )
+
+    # создаём адреса
+    for index, addr in enumerate(all_addresses):
+        is_finish = index == len(all_addresses) - 1
+        await DataOrderAddresses.create(
+            id_order=order.id,
+            from_address=addr["from_address"],
+            to_address=addr["to_address"],
+            from_lat=addr["from_lat"],
+            from_lon=addr["from_lon"],
+            to_lat=addr["to_lat"],
+            to_lon=addr["to_lon"],
+            isFinish=is_finish,
+        )
+
     await DataOrderInfo.create(
         id_order=order.id,
         client_lon=item.my_location.longitude,
@@ -1029,19 +1055,21 @@ async def start_onetime_drive(request: Request, item: CurrentDrive):
         price=tp,
     )
 
-    if item.other_parametrs is not None and len(item.other_parametrs) > 0:
+    if item.other_parametrs:
         for each in item.other_parametrs:
             await DataOrderOtherParametrs.create(
                 id_order=order.id, id_other_parametr=each.parametr, amount=each.count or 0
             )
+
     token = str(uuid.uuid4()) + str(uuid.uuid4())
     while (
         await UsersUserOrder.filter(token=token, isActive=True).count() > 1
-    ):  # TODO: Почему не '>='?
+    ):
         token = str(uuid.uuid4()) + str(uuid.uuid4())
+
     await UsersUserOrder.create(id_user=request.user, token=token, id_order=order.id)
-    # await send_order_to_driver(order.id)
     await DataOrder.filter(id=order.id).update(id_status=4)
+
     user_order = await UsersUser.filter(id=request.user).first().values("phone", "name", "surname")
     user_photo: dict = await UsersUserPhoto.filter(id_user=request.user).first().values()
     user_photo: str = (
@@ -1049,6 +1077,7 @@ async def start_onetime_drive(request: Request, item: CurrentDrive):
         if user_photo is None or "photo_path" not in user_photo
         else user_photo["photo_path"]
     )
+
     return JSONResponse(
         {
             "status": True,
