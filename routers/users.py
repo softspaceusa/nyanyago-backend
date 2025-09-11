@@ -26,6 +26,8 @@ from models.authentication_db import (UsersAuthorizationData,
                                       UsersMobileAuthentication,
                                       UsersReferalCode, UsersUserAccount)
 from models.drivers_db import UsersCar, UsersDriverData
+from models.orders_db import DataScheduleRoadContact, DataScheduleRoadAddress, \
+    DataScheduleRoadChild, DataScheduleRoad, DataSchedule
 from models.static_data_db import (DataCarMark, DataCarModel, DataColor,
                                    DataTypeAccount)
 from models.users_db import (DataDebitCard, DataUserBalance,
@@ -1187,3 +1189,268 @@ async def delete_child(request: Request, child_id: int):
         return {"status": "ok"}
 
     return access_forbidden
+
+
+@router.get("/get_me_extended")
+async def get_extended_client_info(request: Request):
+    """
+    Получить расширенную информацию о пользователе:
+        - Информация о родителе
+        - Информация о детях (с привязанными локациями)
+        - Локации без привязки к детям
+
+    Args:
+        request (Request): Запрос.
+
+    Returns:
+        JSONResponse: Ответ в формате JSON с полной информацией о пользователе.
+    """
+    # Проверяем существование пользователя
+    if not await UsersUser.filter(id=request.user, isActive=True).exists():
+        return JSONResponse(
+            {"status": False, "message": "User not found or inactive"},
+            status_code=404
+        )
+
+    user_info = await UsersUser.filter(id=request.user).first().values(
+        "id",
+        "name",
+        "surname",
+        "phone",
+    )
+
+    children = await UsersChild.filter(
+        id_user=request.user,
+        is_active=True
+    ).order_by("-datetime_create").values(
+        "id",
+        "surname",
+        "name",
+        "patronymic",
+        "child_phone",
+        "age",
+    )
+
+    user_photopath = await UsersUserPhoto.filter(id_user=request.user).first().values(
+        "photo_path")
+    user_info["photo_path"] = user_photopath[
+        "photo_path"] if user_photopath is not None and "photo_path" in user_photopath else not_user_photo
+
+    # =================== Получаем инфо о локациях ===================
+    user_schedules = await DataSchedule.filter(
+        id_user=request.user,
+        isActive__in=[True, False]
+    ).all().values_list("id", flat=True)
+
+    # Получаем все активные маршруты с основной информацией
+    roads = await DataScheduleRoad.filter(
+        isActive=True,
+        id_schedule__in=list(user_schedules)
+    ).all().values(
+        "id", "title", "week_day", "start_time", "end_time", "type_drive"
+    )
+
+    # Получаем все связи маршрутов с детьми
+    road_child_relations = await DataScheduleRoadChild.filter(
+        id_schedule_road__in=[road["id"] for road in roads],
+        is_active=True
+    ).all().values(
+        "id_schedule_road", "id_child"
+    )
+
+    # Создаем словарь для группировки локаций по детям
+    children_locations = {child["id"]: [] for child in children}
+    unassigned_locations_dict = {}  # Будем использовать словарь для группировки по адресам
+    processed_roads = set()
+
+    for road in roads:
+        # Получаем адреса для маршрута
+        addresses = await DataScheduleRoadAddress.filter(
+            id_schedule_road=road["id"]
+        ).order_by("id").all().values(
+            "from_address", "to_address", "from_lon", "from_lat", "to_lon", "to_lat"
+        )
+
+        # Получаем контактные лица для маршрута
+        contacts = await DataScheduleRoadContact.filter(
+            id_schedule_road=road["id"], is_active=True
+        ).all().values(
+            "surname", "name", "patronymic", "contact_phone"
+        )
+
+        # Формируем ФИО контактного лица
+        contact_info = None
+        if contacts:
+            contact = contacts[0]  # Берем первое контактное лицо
+            contact_info = {
+                "fio": f"{contact['surname'] or ''} {contact['name'] or ''} {contact['patronymic'] or ''}".strip(),
+                "phone": contact["contact_phone"]
+            }
+
+        # Создаем ключ для группировки локаций по адресам
+        location_key_parts = []
+        intermediate_points = []
+
+        if addresses:
+            if "2" in road["type_drive"]:
+                # Для сложных маршрутов
+                points = []
+                for addr in addresses:
+                    points.append({
+                        "address": addr["from_address"],
+                        "lon": addr["from_lon"],
+                        "lat": addr["from_lat"]
+                    })
+                    if addr == addresses[-1]:
+                        points.append({
+                            "address": addr["to_address"],
+                            "lon": addr["to_lon"],
+                            "lat": addr["to_lat"]
+                        })
+
+                from_point = points[0]
+                to_point = points[-1]
+                intermediate_points = points[1:-1] if len(points) > 2 else []
+
+                location_key_parts.extend([
+                    f"from:{from_point['address']}_{from_point['lon']}_{from_point['lat']}",
+                    f"to:{to_point['address']}_{to_point['lon']}_{to_point['lat']}"
+                ])
+
+                for i, point in enumerate(intermediate_points):
+                    location_key_parts.append(
+                        f"int_{i}:{point['address']}_{point['lon']}_{point['lat']}")
+            else:
+                # Для простых маршрутов
+                addr = addresses[0]
+                location_key_parts.extend([
+                    f"from:{addr['from_address']}_{addr['from_lon']}_{addr['from_lat']}",
+                    f"to:{addr['to_address']}_{addr['to_lon']}_{addr['to_lat']}"
+                ])
+                from_point = {
+                    "address": addr["from_address"],
+                    "lon": addr["from_lon"],
+                    "lat": addr["from_lat"]
+                }
+                to_point = {
+                    "address": addr["to_address"],
+                    "lon": addr["to_lon"],
+                    "lat": addr["to_lat"]
+                }
+
+        location_key = "|".join(location_key_parts)
+
+        # Создаем объект локации
+        location = {
+            "road_id": road["id"],
+            "name": road["title"],
+            "contact": contact_info,
+            "schedule": {
+                "week_day": road["week_day"],
+                "start_time": road["start_time"],
+                "end_time": road["end_time"]
+            },
+            "is_complex": "2" in road["type_drive"],
+            "from_address": from_point["address"] if addresses else None,
+            "to_address": to_point["address"] if addresses else None,
+            "from_lon": from_point["lon"] if addresses else None,
+            "from_lat": from_point["lat"] if addresses else None,
+            "to_lon": to_point["lon"] if addresses else None,
+            "to_lat": to_point["lat"] if addresses else None,
+            "intermediate_points": intermediate_points
+        }
+
+        # Находим детей, связанных с этим маршрутом
+        related_children = [rel["id_child"] for rel in road_child_relations if
+                            rel["id_schedule_road"] == road["id"]]
+
+        if related_children:
+            # Добавляем локацию к каждому связанному ребенку
+            for child_id in related_children:
+                if child_id in children_locations:
+                    # Проверяем, есть ли уже такая локация у ребенка
+                    existing_loc_index = None
+                    for i, loc in enumerate(children_locations[child_id]):
+                        existing_key_parts = []
+                        existing_key_parts.extend([
+                            f"from:{loc['from_address']}_{loc['from_lon']}_{loc['from_lat']}",
+                            f"to:{loc['to_address']}_{loc['to_lon']}_{loc['to_lat']}"
+                        ])
+                        for j, point in enumerate(loc.get("intermediate_points", [])):
+                            existing_key_parts.append(
+                                f"int_{j}:{point['address']}_{point['lon']}_{point['lat']}")
+                        existing_key = "|".join(existing_key_parts)
+
+                        if existing_key == location_key:
+                            existing_loc_index = i
+                            break
+
+                    if existing_loc_index is not None:
+                        # Добавляем расписание к существующей локации
+                        children_locations[child_id][existing_loc_index][
+                            "schedules"].append(location["schedule"])
+                    else:
+                        # Создаем новую локацию с массивом расписаний
+                        new_location = {
+                            "road_id": location["road_id"],
+                            "name": location["name"],
+                            "contact": location["contact"],
+                            "schedules": [location["schedule"]],
+                            "is_complex": location["is_complex"],
+                            "from_address": location["from_address"],
+                            "to_address": location["to_address"],
+                            "from_lon": location["from_lon"],
+                            "from_lat": location["from_lat"],
+                            "to_lon": location["to_lon"],
+                            "to_lat": location["to_lat"],
+                            "intermediate_points": location["intermediate_points"]
+                        }
+                        children_locations[child_id].append(new_location)
+        else:
+            # Локация без привязки к детям
+            if location_key in unassigned_locations_dict:
+                # Добавляем расписание к существующей локации
+                unassigned_locations_dict[location_key]["schedules"].append(
+                    location["schedule"])
+                # Обновляем road_ids (можно добавить или заменить)
+                if isinstance(unassigned_locations_dict[location_key]["road_id"], list):
+                    unassigned_locations_dict[location_key]["road_id"].append(
+                        location["road_id"])
+                else:
+                    unassigned_locations_dict[location_key]["road_id"] = [
+                        unassigned_locations_dict[location_key]["road_id"],
+                        location["road_id"]]
+            else:
+                # Создаем новую локацию с массивом расписаний
+                new_location = {
+                    "road_id": location["road_id"],
+                    "name": location["name"],
+                    "contact": location["contact"],
+                    "schedules": [location["schedule"]],
+                    "is_complex": location["is_complex"],
+                    "from_address": location["from_address"],
+                    "to_address": location["to_address"],
+                    "from_lon": location["from_lon"],
+                    "from_lat": location["from_lat"],
+                    "to_lon": location["to_lon"],
+                    "to_lat": location["to_lat"],
+                    "intermediate_points": location["intermediate_points"]
+                }
+                unassigned_locations_dict[location_key] = new_location
+
+    # Формируем итоговый список детей с их локациями
+    children_with_locations = []
+    for child in children:
+        child_data = dict(child)
+        child_data["locations"] = children_locations.get(child["id"], [])
+        children_with_locations.append(child_data)
+
+    # Конвертируем словарь несвязанных локаций в список
+    unassigned_locations = list(unassigned_locations_dict.values())
+
+    return JSONResponse({
+        "success": True,
+        "user": user_info,
+        "children": children_with_locations,
+        "unassigned_locations": unassigned_locations,
+    })
