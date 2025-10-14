@@ -317,7 +317,7 @@ class DataScheduleRoadContact(Model):
     name = fields.TextField(null=True)
     patronymic = fields.TextField(null=True)
     contact_phone = fields.TextField(null=True)
-    is_active = fields.BooleanField(default=True)
+    isActive = fields.BooleanField(default=True)
     datetime_create = fields.DatetimeField(null=True)
 
     class Meta:
@@ -335,7 +335,7 @@ class DataScheduleRoadChild(Model):
     id = fields.BigIntField(pk=True)
     id_schedule_road = fields.BigIntField(null=False)
     id_child = fields.BigIntField(null=False)
-    is_active = fields.BooleanField(default=True)
+    isActive = fields.BooleanField(default=True)
     datetime_create = fields.DatetimeField(null=True)
 
     class Meta:

@@ -38,7 +38,7 @@ class UsersChild(Model):
     age = fields.IntField(null=True)
     contact_phone = fields.TextField(null=True)  # не используется - надо удалить
     id_user = fields.BigIntField(null=False)
-    is_active = fields.BooleanField(default=True)
+    isActive = fields.BooleanField(default=True)
     datetime_create = fields.DatetimeField(null=True)
 
     class Meta:

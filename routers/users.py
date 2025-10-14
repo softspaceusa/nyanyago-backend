@@ -1141,7 +1141,7 @@ async def update_child(request: Request, child_id: int, payload: ChildUpdate):
 
     # Родитель (тип 1 и только он один)
     if 1 in type_account and len(type_account) == 1:
-        child = await UsersChild.filter(id=child_id, id_user=request.user, is_active=True).first()
+        child = await UsersChild.filter(id=child_id, id_user=request.user, isActive=True).first()
         if not child:
             return {"error": "child not found or access denied"}
         await child.update_from_dict(payload.dict(exclude_unset=True))
@@ -1150,7 +1150,7 @@ async def update_child(request: Request, child_id: int, payload: ChildUpdate):
 
     # Админ (тип 6 или 7 и только он один)
     if (6 in type_account and len(type_account) == 1) or (7 in type_account and len(type_account) == 1):
-        child = await UsersChild.filter(id=child_id, is_active=True).first()
+        child = await UsersChild.filter(id=child_id, isActive=True).first()
         if not child:
             return {"error": "child not found"}
         await child.update_from_dict(payload.dict(exclude_unset=True))
@@ -1172,7 +1172,7 @@ async def delete_child(request: Request, child_id: int):
 
     # Родитель
     if 1 in type_account and len(type_account) == 1:
-        child = await UsersChild.filter(id=child_id, id_user=request.user, is_active=True).first()
+        child = await UsersChild.filter(id=child_id, id_user=request.user, isActive=True).first()
         if not child:
             return {"error": "child not found or access denied"}
         child.is_active = False
@@ -1181,7 +1181,7 @@ async def delete_child(request: Request, child_id: int):
 
     # Админ
     if (6 in type_account and len(type_account) == 1) or (7 in type_account and len(type_account) == 1):
-        child = await UsersChild.filter(id=child_id, is_active=True).first()
+        child = await UsersChild.filter(id=child_id, isActive=True).first()
         if not child:
             return {"error": "child not found"}
         child.is_active = False
@@ -1221,7 +1221,7 @@ async def get_extended_client_info(request: Request):
 
     children = await UsersChild.filter(
         id_user=request.user,
-        is_active=True
+        isActive=True
     ).order_by("-datetime_create").values(
         "id",
         "surname",
@@ -1253,7 +1253,7 @@ async def get_extended_client_info(request: Request):
     # Получаем все связи маршрутов с детьми
     road_child_relations = await DataScheduleRoadChild.filter(
         id_schedule_road__in=[road["id"] for road in roads],
-        is_active=True
+        isActive=True
     ).all().values(
         "id_schedule_road", "id_child"
     )
@@ -1273,7 +1273,7 @@ async def get_extended_client_info(request: Request):
 
         # Получаем контактные лица для маршрута
         contacts = await DataScheduleRoadContact.filter(
-            id_schedule_road=road["id"], is_active=True
+            id_schedule_road=road["id"], isActive=True
         ).all().values(
             "surname", "name", "patronymic", "contact_phone"
         )

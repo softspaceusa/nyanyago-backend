@@ -312,7 +312,7 @@ async def get_user_children(request: Request, user_id: int):
     # Получаем всех активных детей пользователя
     children = await UsersChild.filter(
         id_user=user_id,
-        is_active=True
+        isActive=True
     ).order_by("-datetime_create").values(
         "id",
         "surname",
@@ -360,7 +360,7 @@ async def get_extended_client_info(request: Request, user_id: int):
 
     children = await UsersChild.filter(
         id_user=user_id,
-        is_active=True
+        isActive=True
     ).order_by("-datetime_create").values(
         "id",
         "surname",
@@ -392,7 +392,7 @@ async def get_extended_client_info(request: Request, user_id: int):
     # Получаем все связи маршрутов с детьми
     road_child_relations = await DataScheduleRoadChild.filter(
         id_schedule_road__in=[road["id"] for road in roads],
-        is_active=True
+        isActive=True
     ).all().values(
         "id_schedule_road", "id_child"
     )
@@ -412,7 +412,7 @@ async def get_extended_client_info(request: Request, user_id: int):
 
         # Получаем контактные лица для маршрута
         contacts = await DataScheduleRoadContact.filter(
-            id_schedule_road=road["id"], is_active=True
+            id_schedule_road=road["id"], isActive=True
         ).all().values(
             "surname", "name", "patronymic", "contact_phone"
         )
